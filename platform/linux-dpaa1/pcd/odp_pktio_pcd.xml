@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ Copyright (c) 2014, Freescale Semiconductor Inc.
+ All rights reserved.
+
+ SPDX-License-Identifier:     BSD-3-Clause
+
+-->
+
+<!--
+-->
+
+<netpcd xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:noNamespaceSchemaLocation="xmlProject/pcd.xsd" name="example"
+	description="Bridging configuration">
+
+	<distribution name="hash_ipv4_src_dst_dist6">
+		<queue count="4" base="0xa00"/>
+		<key>
+			<fieldref name="ipv4.src"/>
+			<fieldref name="ipv4.dst"/>
+		</key>
+	</distribution>
+	<distribution name="hash_ipv4_src_dst_dist7">
+		<queue count="4" base="0xb00"/>
+		<key>
+			<fieldref name="ipv4.src"/>
+			<fieldref name="ipv4.dst"/>
+		</key>
+	</distribution>
+
+	<distribution name="default_dist6">
+		<queue count="1" base="0x5d"/>
+	</distribution>
+	<distribution name="default_dist7">
+		<queue count="1" base="0x5f"/>
+	</distribution>
+
+
+	<policy name="hash_ipv4_src_dst_policy6">
+		<dist_order>
+			<distributionref name="hash_ipv4_src_dst_dist6"/>
+			<distributionref name="default_dist6"/>
+		</dist_order>
+	</policy>
+	<policy name="hash_ipv4_src_dst_policy7">
+		<dist_order>
+			<distributionref name="hash_ipv4_src_dst_dist7"/>
+			<distributionref name="default_dist7"/>
+		</dist_order>
+	</policy>
+
+</netpcd>

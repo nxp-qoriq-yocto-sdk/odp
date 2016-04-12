@@ -1,0 +1,252 @@
+#include $(top_srcdir)/Makefile.inc
+include $(top_srcdir)/platform/Makefile.inc
+
+PLAT_CFLAGS = -D$(SOC)
+
+if LS1043_SOC
+FMD_CFLAGS = -D$(SOC) -DNCSW_LINUX
+FMLIB = fm-arm64a53
+USDPAA_LIB_PATH = lib_arm64
+LIB_PATH = lib
+SPEC_CFLAGS =
+endif
+if P4_SOC
+FMD_CFLAGS = -D$(SOC) -DNCSW_LINUX
+FMLIB = fm-ppce500mc
+USDPAA_LIB_PATH = lib_powerpc
+LIB_PATH = lib
+SPEC_CFLAGS =
+endif
+if T1_SOC
+FMD_CFLAGS = -DFMAN_V3L -DNCSW_LINUX
+FMLIB = fm-ppc64e5500-fmv3l
+USDPAA_LIB_PATH = lib_powerpc64
+LIB_PATH = lib64
+SPEC_CFLAGS = -m64 -mhard-float -mcpu=e5500
+endif
+if T4_SOC
+FMD_CFLAGS = -DFMAN_V3H -DNCSW_LINUX
+FMLIB = fm-ppc64e6500
+USDPAA_LIB_PATH = lib_powerpc64
+LIB_PATH = lib64
+SPEC_CFLAGS = -m64 -mhard-float -mcpu=e6500
+endif
+
+AM_CFLAGS +=  $(PLAT_CFLAGS)
+AM_CFLAGS +=  -D_GNU_SOURCE $(SPEC_CFLAGS)
+AM_CFLAGS += -std=gnu99
+AM_CFLAGS +=  -I$(srcdir)/include
+AM_CFLAGS +=  -I$(top_srcdir)/include
+AM_CFLAGS +=  -I$(top_srcdir)/include/odp
+AM_CFLAGS +=  -I$(top_srcdir)/helper/include
+
+AM_CFLAGS +=  -I$(srcdir)/../linux-generic/include
+AM_CFLAGS +=  -I$(srcdir)/../linux-generic/include/api
+
+if SDK_INSTALL_PATH_
+AM_CFLAGS    += -I$(SDK_INSTALL_PATH)/usr/include
+AM_CFLAGS    += -I$(SDK_INSTALL_PATH)/usr/include/usdpaa
+AM_CFLAGS    += -I$(SDK_INSTALL_PATH)/usr/include/fmd
+AM_CFLAGS    += -I$(SDK_INSTALL_PATH)/usr/include/fmd/Peripherals
+AM_CFLAGS    += -I$(SDK_INSTALL_PATH)/usr/include/fmd/integrations $(FMD_CFLAGS)
+AM_LDFLAGS   += -L$(SDK_INSTALL_PATH)/usr/$(LIB_PATH)
+
+
+endif
+
+if USDPAA_PATH_
+AM_CFLAGS   += -I$(USDPAA_PATH)/include
+AM_CFLAGS   += -I$(USDPAA_PATH)/include/usdpaa
+AM_CFLAGS   += -I$(USDPAA_PATH)/include/fsl_sec
+AM_LDFLAGS  += -L$(USDPAA_PATH)/$(USDPAA_LIB_PATH)
+
+endif
+
+if FMLIB_PATH_
+AM_CFLAGS    += -I$(FMLIB_PATH)/include/fmd
+AM_CFLAGS    += -I$(FMLIB_PATH)/include/fmd/Peripherals
+AM_CFLAGS    += -I$(FMLIB_PATH)/include/fmd/integrations $(FMD_CFLAGS)
+
+AM_LDFLAGS   += -L$(FMLIB_PATH)
+
+endif
+
+
+AM_CFLAGS += -Wno-error -Wno-cast-qual -Wno-pointer-arith
+
+include_HEADERS = \
+		  $(top_srcdir)/include/odp.h
+
+USDPAA_LIBS = -lusdpaa_fman \
+	   -lusdpaa_of \
+	   -lusdpaa_qbman \
+	   -lusdpaa_process \
+	   -lusdpaa_dma \
+	   -lusdpaa_dma_mem \
+	   -lusdpaa_syscfg
+
+LIBS = $(USDPAA_LIBS) -l$(FMLIB)
+LIBS += -lxml2
+
+odpincludedir= $(includedir)/odp
+odpinclude_HEADERS = \
+		  $(top_srcdir)/platform/linux-generic/include/odp/align.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/atomic.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/barrier.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/buffer.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/byteorder.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/classification.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/compiler.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/config.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/cpu.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/cpumask.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/crypto.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/debug.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/errno.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/event.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/hints.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/init.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/packet_flags.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/packet.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/packet_io.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/pool.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/queue.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/random.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/rwlock.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/schedule.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/schedule_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/shared_memory.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/spinlock.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/std_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/sync.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/system_info.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/thread.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/thrmask.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/ticketlock.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/time.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/timer.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/version.h
+
+odpplatincludedir= $(includedir)/odp/plat
+odpplatinclude_HEADERS = \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/atomic_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/barrier_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/buffer_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/byteorder_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/classification_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/cpumask_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/crypto_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/event_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/init_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/packet_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/packet_io_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/pool_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/queue_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/rwlock_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/schedule_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/shared_memory_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/spinlock_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/strong_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/thrmask_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/ticketlock_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/timer_types.h \
+		  $(top_srcdir)/platform/linux-generic/include/odp/plat/version_types.h
+
+odpapiincludedir= $(includedir)/odp/api
+odpapiinclude_HEADERS = \
+		  $(top_srcdir)/include/odp/api/align.h \
+		  $(top_srcdir)/include/odp/api/atomic.h \
+		  $(top_srcdir)/include/odp/api/barrier.h \
+		  $(top_srcdir)/include/odp/api/buffer.h \
+		  $(top_srcdir)/include/odp/api/byteorder.h \
+		  $(top_srcdir)/include/odp/api/classification.h \
+		  $(top_srcdir)/include/odp/api/compiler.h \
+		  $(top_srcdir)/include/odp/api/config.h \
+		  $(top_srcdir)/include/odp/api/cpu.h \
+		  $(top_srcdir)/include/odp/api/cpumask.h \
+		  $(top_srcdir)/include/odp/api/crypto.h \
+		  $(top_srcdir)/include/odp/api/debug.h \
+		  $(top_srcdir)/include/odp/api/errno.h \
+		  $(top_srcdir)/include/odp/api/event.h \
+		  $(top_srcdir)/include/odp/api/hints.h \
+		  $(top_srcdir)/include/odp/api/init.h \
+		  $(top_srcdir)/include/odp/api/packet.h \
+		  $(top_srcdir)/include/odp/api/packet_flags.h \
+		  $(top_srcdir)/include/odp/api/packet_io.h \
+		  $(top_srcdir)/include/odp/api/pool.h \
+		  $(top_srcdir)/include/odp/api/queue.h \
+		  $(top_srcdir)/include/odp/api/random.h \
+		  $(top_srcdir)/include/odp/api/rwlock.h \
+		  $(top_srcdir)/include/odp/api/schedule.h \
+		  $(top_srcdir)/include/odp/api/shared_memory.h \
+		  $(top_srcdir)/include/odp/api/spinlock.h \
+		  $(top_srcdir)/include/odp/api/std_types.h \
+		  $(top_srcdir)/include/odp/api/sync.h \
+		  $(top_srcdir)/include/odp/api/system_info.h \
+		  $(top_srcdir)/include/odp/api/thread.h \
+		  $(top_srcdir)/include/odp/api/thrmask.h \
+		  $(top_srcdir)/include/odp/api/ticketlock.h \
+		  $(top_srcdir)/include/odp/api/time.h \
+		  $(top_srcdir)/include/odp/api/timer.h \
+		  $(top_srcdir)/include/odp/api/version.h
+
+noinst_HEADERS = \
+		  ${top_srcdir}/platform/linux-generic/include/odp_align_internal.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_atomic_internal.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_buffer_inlines.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_buffer_internal.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_classification_datamodel.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_classification_inlines.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_classification_internal.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_crypto_internal.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_debug_internal.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_forward_typedefs_internal.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_internal.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_packet_internal.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_packet_io_internal.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_packet_io_queue.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_packet_socket.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_pool_internal.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_queue_internal.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_schedule_internal.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_spin_internal.h \
+		  ${top_srcdir}/platform/linux-generic/include/odp_timer_internal.h \
+		  ${top_srcdir}/platform/linux-generic/Makefile.inc
+
+__LIB__libodp_la_SOURCES = \
+			   ../linux-generic/odp_barrier.c \
+			   odp_buffer.c \
+			   odp_buffer_pool_bman.c \
+			   odp_classification.c \
+			   odp_cpumask.c \
+                           odp_system_info.c \
+			   odp_cpumask_task.c \
+			   odp_crypto.c \
+			   ../linux-generic/odp_errno.c \
+			   ../linux-generic/odp_event.c \
+			   odp_init.c \
+			   ../linux-generic/odp_impl.c \
+			   odp_packet.c \
+			   odp_packet_flags.c \
+			   odp_packet_io.c \
+			   odp_pool.c \
+			   odp_queue.c \
+			   ../linux-generic/odp_rwlock.c \
+			   odp_schedule.c \
+			   odp_shared_memory.c \
+			   ../linux-generic/odp_spinlock.c \
+			   ../linux-generic/odp_thread.c \
+			   ../linux-generic/odp_thrmask.c \
+			   ../linux-generic/odp_ticketlock.c \
+			   odp_time.c \
+			   odp_timer.c \
+			   ../linux-generic/odp_version.c \
+			   ../linux-generic/odp_weak.c \
+                           arch/linux/odp_time_cycles.c \
+                           arch/linux/odp_cpu_cycles.c
+
+EXTRA_DIST = \
+		arch/linux/odp_time_cycles.c \
+		arch/linux/odp_cpu_cycles.c \
+		arch/mips64/odp_time_cycles.c \
+		arch/x86/odp_time_cycles.c
