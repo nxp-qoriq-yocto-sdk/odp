@@ -158,6 +158,9 @@ void odp_schedule_resume(void);
  * Early atomic context release may increase parallelism and thus system
  * performance, but user needs to design carefully the split into critical vs.
  * non-critical sections.
+ *
+ * @todo Not implemented.
+ *
  */
 void odp_schedule_release_atomic(void);
 
@@ -175,6 +178,8 @@ void odp_schedule_release_atomic(void);
  * Early ordered context release may increase parallelism and thus system
  * performance, since scheduler may start reordering events sooner than the next
  * schedule call.
+ *
+ * @todo Not implemented.
  */
 void odp_schedule_release_ordered(void);
 
@@ -189,6 +194,8 @@ void odp_schedule_release_ordered(void);
  * application processing the current event(s).
  *
  * @param num     Number of events to prefetch
+ *
+ * @todo Not implemented.
  */
 void odp_schedule_prefetch(int num);
 
@@ -317,6 +324,7 @@ int odp_schedule_group_thrmask(odp_schedule_group_t group,
  * @param lock_index Index of the ordered lock in the current context to be
  *                   acquired. Must be in the range 0..odp_queue_lock_count()
  *                   - 1
+ * @todo Not implemented.
  */
 void odp_schedule_order_lock(unsigned lock_index);
 
@@ -330,6 +338,7 @@ void odp_schedule_order_lock(unsigned lock_index);
  *                   released. Results are undefined if the caller does not
  *                   hold this lock. Must be in the range
  *                   0..odp_queue_lock_count() - 1
+ * @todo Not implemented.
  */
 void odp_schedule_order_unlock(unsigned lock_index);
 

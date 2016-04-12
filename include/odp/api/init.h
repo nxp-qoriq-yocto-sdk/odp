@@ -124,16 +124,17 @@ typedef struct odp_init_t {
 	odp_abort_func_t abort_fn;
 } odp_init_t;
 
+
 /**
  * ODP platform initialization data
+ *
+ * @typedef odp_platform_init_t
  *
  * @note ODP API does nothing with this data. It is the underlying
  * implementation that requires it and any data passed here is not portable.
  * It is required that the application takes care of identifying and
  * passing any required platform specific data.
  */
-typedef struct odp_platform_init_t {
-} odp_platform_init_t;
 
 
 /**

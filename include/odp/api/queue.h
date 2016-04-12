@@ -254,6 +254,8 @@ odp_schedule_group_t odp_queue_sched_group(odp_queue_t queue);
  *
  * @return Number of ordered locks associated with this ordered queue
  * @retval <0 Specified queue is not ordered
+ *
+ * @todo Not implemented.
  */
 int odp_queue_lock_count(odp_queue_t queue);
 

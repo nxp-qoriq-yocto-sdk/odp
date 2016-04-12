@@ -96,6 +96,8 @@ void odp_packet_free(odp_packet_t pkt);
  * @param pkt           Packet handle
  * @param len           Packet data length
  *
+ * @todo API is not implemented for Len variable.
+ *
  * @retval 0 on success
  * @retval <0 on failure
  *
@@ -154,6 +156,8 @@ void *odp_packet_head(odp_packet_t pkt);
  *
  * @param pkt  Packet handle
  *
+ * @todo API is Implemented for single buffer only.
+ *
  * @return  Total packet buffer length in bytes
  *
  * @see odp_packet_reset()
@@ -171,6 +175,8 @@ uint32_t odp_packet_buf_len(odp_packet_t pkt);
  * segmentation) and add_data/rem_data calls (may modify segmentation).
  *
  * @param pkt  Packet handle
+ *
+ * @todo API is Implemented for single buffer only.
  *
  * @return  Pointer to the packet data
  *
@@ -438,6 +444,8 @@ void odp_packet_user_ptr_set(odp_packet_t pkt, const void *ctx);
  *
  * @param pkt  Packet handle
  *
+ * @todo Not implemented.
+ *
  * @return       User area address associated with the packet
  * @retval NULL  The packet does not have user area
  */
@@ -449,6 +457,8 @@ void *odp_packet_user_area(odp_packet_t pkt);
  * The size is fixed and defined in packet pool parameters.
  *
  * @param pkt  Packet handle
+ *
+ * @todo Not implemented.
  *
  * @return  User area size in bytes
  */
@@ -788,6 +798,8 @@ uint32_t odp_packet_seg_data_len(odp_packet_t pkt, odp_packet_seg_t seg);
  * @param offset  Byte offset into the packet
  * @param len     Number of bytes to add into the offset
  *
+ * @todo Not implemented.
+ *
  * @return New packet handle
  * @retval ODP_PACKET_INVALID on failure
  */
@@ -806,6 +818,8 @@ odp_packet_t odp_packet_add_data(odp_packet_t pkt, uint32_t offset,
  * @param pkt     Packet handle
  * @param offset  Byte offset into the packet
  * @param len     Number of bytes to remove from the offset
+ *
+ * @todo Not implemented.
  *
  * @return New packet handle
  * @retval ODP_PACKET_INVALID on failure
@@ -846,6 +860,8 @@ odp_packet_t odp_packet_copy(odp_packet_t pkt, odp_pool_t pool);
  * @param offset Byte offset into the packet
  * @param len    Number of bytes to copy
  * @param dst    Destination address
+ *
+ * @todo Not implemented.
  *
  * @retval 0 on success
  * @retval <0 on failure

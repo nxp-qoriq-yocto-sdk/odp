@@ -71,6 +71,9 @@ typedef struct odp_shm_info_t {
  * @param[in] flags  Shared memory parameter flags (ODP_SHM_*).
  *                   Default value is 0.
  *
+ * @todo Returned memory cannot be shared among the processes as
+ *	 ODP_SHM_PROC flag is not supported.
+ *
  * @return Handle of the reserved block
  * @retval ODP_SHM_INVALID on failure
  */
@@ -84,6 +87,9 @@ odp_shm_t odp_shm_reserve(const char *name, uint64_t size, uint64_t align,
  * @note Freeing memory that is in use will result in UNDEFINED behavior
  *
  * @param[in] shm Block handle
+ *
+ * @todo API is functional for valid memory address(which is to be freed) only.
+ *	 Handling for invalid address are required to be added.
  *
  * @retval 0 on success
  * @retval <0 on failure

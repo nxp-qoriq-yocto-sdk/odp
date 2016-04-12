@@ -131,6 +131,9 @@ int odp_cos_queue_set(odp_cos_t cos_id, odp_queue_t queue_id);
 *					given class-of-service
 *
 * @retval	ODP_QUEUE_INVALID	on failure
+*
+* @todo Not implemented.
+*
 */
 odp_queue_t odp_cos_queue(odp_cos_t cos_id);
 
@@ -140,10 +143,13 @@ odp_queue_t odp_cos_queue(odp_cos_t cos_id);
  * @param[in]	cos_id		class-of-service instance.
  * @param[in]	drop_policy	Desired packet drop policy for this class.
  *
+ * @todo Not implemented.
+ *
  * @retval			0 on success
  * @retval			<0 on failure
  *
  * @note Optional.
+ *
  */
 int odp_cos_drop_set(odp_cos_t cos_id, odp_drop_e drop_policy);
 
@@ -154,6 +160,8 @@ int odp_cos_drop_set(odp_cos_t cos_id, odp_drop_e drop_policy);
 *
 * @retval			Drop policy configured with the given
 *				class-of-service
+* @todo Not implemented.
+*
 */
 odp_drop_e odp_cos_drop(odp_cos_t cos_id);
 
@@ -166,6 +174,7 @@ odp_drop_e odp_cos_drop(odp_cos_t cos_id);
  * @param[in]	qos_table	Values of the Layer-2 QoS header field.
  * @param[in]	cos_table	Class-of-service assigned to each of the
  *				allowed Layer-2 QOS levels.
+ *
  * @retval			0 on success
  * @retval			<0 on failure
  */
@@ -300,6 +309,8 @@ int odp_pktio_pmr_cos(odp_pmr_t pmr_id,
  * @param[in]	src_cos		CoS to be filtered
  * @param[in]	dst_cos		CoS to be assigned to packets filtered
  *				from src_cos that match pmr_id.
+ *
+ * @todo Not implemented.
  *
  * @retval		0 on success
  * @retval		<0 on failure

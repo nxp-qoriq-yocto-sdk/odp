@@ -77,6 +77,9 @@ int odp_packet_has_eth(odp_packet_t pkt);
  * Check for jumbo frame
  *
  * @param pkt Packet handle
+ *
+ * @todo Not implemented.
+ *
  * @retval non-zero if packet contains a jumbo frame
  * @retval 0 if packet does not contain a jumbo frame
  */
@@ -212,6 +215,9 @@ void odp_packet_has_l2_set(odp_packet_t pkt, int val);
  *
  * @param pkt Packet handle
  * @param val Value
+ *
+ * @todo Implemented for IPv4 packets only.
+ *
  */
 void odp_packet_has_l3_set(odp_packet_t pkt, int val);
 
@@ -220,6 +226,9 @@ void odp_packet_has_l3_set(odp_packet_t pkt, int val);
  *
  * @param pkt Packet handle
  * @param val Value
+ *
+ * @todo Not implemented.
+ *
  */
 void odp_packet_has_l4_set(odp_packet_t pkt, int val);
 
@@ -236,6 +245,8 @@ void odp_packet_has_eth_set(odp_packet_t pkt, int val);
  *
  * @param pkt Packet handle
  * @param val Value
+ *
+ * @todo Not implemented.
  */
 void odp_packet_has_jumbo_set(odp_packet_t pkt, int val);
 

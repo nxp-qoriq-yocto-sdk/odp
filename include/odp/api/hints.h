@@ -56,7 +56,7 @@ extern "C" {
 #define ODP_DEPRECATED __attribute__((__deprecated__))
 
 /**
- * Intentionally unused variables ot functions
+ * Intentionally unused variables or functions
  */
 #define ODP_UNUSED     __attribute__((__unused__))
 

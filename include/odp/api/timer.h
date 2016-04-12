@@ -124,6 +124,9 @@ odp_timer_pool_create(const char *name,
  * The purpose of this call is to coordinate the creation of multiple timer
  * pools that may use the same underlying HW resources.
  * This function may be called multiple times.
+ *
+ * @todo Not implemented.
+ *
  */
 void odp_timer_pool_start(void);
 
@@ -259,6 +262,8 @@ int odp_timer_set_abs(odp_timer_t tim,
  * timeout event that is replaced by a successful set operation will be
  * returned here.
  *
+ * @todo Return types ODP_TIMER_TOOEARLY, ODP_TIMER_TOOLATE not supported.
+ *
  * @retval ODP_TIMER_SUCCESS Operation succeeded
  * @retval ODP_TIMER_TOOEARLY Operation failed because expiration tick too
  * early
@@ -309,6 +314,8 @@ odp_event_t odp_timeout_to_event(odp_timeout_t tmo);
  * Check for fresh timeout
  * If the corresponding timer has been reset or cancelled since this timeout
  * was enqueued, the timeout is stale (not fresh).
+ *
+ * @todo Not implemented.
  *
  * @param tmo Timeout handle
  * @retval 1 Timeout is fresh
