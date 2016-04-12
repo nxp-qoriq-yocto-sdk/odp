@@ -2,6 +2,7 @@
 *.gcda
 *.gcno
 *.la
+*.a
 *.lo
 *.o
 *.orig
@@ -27,7 +28,6 @@ config.log
 config.status
 config.sub
 configure
-core
 cscope.out
 depcomp
 doc/output
@@ -37,6 +37,6 @@ libtool
 ltmain.sh
 m4/*.m4
 missing
-pkgconfig/libodp*.pc
+pkgconfig/lib*.pc
 tags
 test-driver
