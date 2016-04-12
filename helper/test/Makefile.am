@@ -20,7 +20,7 @@ endif
 
 dist_bin_SCRIPTS =
 
-bin_PROGRAMS = $(EXECUTABLES) $(COMPILE_ONLY)
+noinst_PROGRAMS = $(EXECUTABLES) $(COMPILE_ONLY)
 
 
 dist_odp_chksum_SOURCES = odp_chksum.c

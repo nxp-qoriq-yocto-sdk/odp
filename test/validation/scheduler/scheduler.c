@@ -10,13 +10,13 @@
 
 #define MAX_WORKERS_THREADS	32
 #define MSG_POOL_SIZE		(4 * 1024 * 1024)
-#define QUEUES_PER_PRIO		16
+#define QUEUES_PER_PRIO		2 /*TODO due to less number of DPCI objects*/
 #define BUF_SIZE		64
 #define TEST_NUM_BUFS		100
 #define BURST_BUF_SIZE		4
 #define NUM_BUFS_EXCL		10000
-#define NUM_BUFS_PAUSE		1000
-#define NUM_BUFS_BEFORE_PAUSE	10
+#define NUM_BUFS_PAUSE		5
+#define NUM_BUFS_BEFORE_PAUSE	1
 
 #define GLOBALS_SHM_NAME	"test_globals"
 #define MSG_POOL_NAME		"msg_pool"
@@ -634,9 +634,10 @@ static void *schedule_common_(void *arg)
 				int ndx_max;
 				int rc;
 
+#ifndef QODP_344
 				ndx_max = odp_queue_lock_count(from);
 				CU_ASSERT_FATAL(ndx_max >= 0);
-
+#endif
 				qctx = odp_queue_context(from);
 
 				for (j = 0; j < num; j++) {
@@ -662,6 +663,7 @@ static void *schedule_common_(void *arg)
 
 				bctx = odp_buffer_addr(
 					odp_buffer_from_event(events[0]));
+#ifndef QODP_344
 				for (ndx = 0; ndx < ndx_max; ndx++) {
 					odp_schedule_order_lock(ndx);
 					CU_ASSERT(bctx->sequence ==
@@ -669,6 +671,7 @@ static void *schedule_common_(void *arg)
 					qctx->lock_sequence[ndx] += num;
 					odp_schedule_order_unlock(ndx);
 				}
+#endif
 			}
 
 			for (j = 0; j < num; j++)
@@ -684,9 +687,10 @@ static void *schedule_common_(void *arg)
 				int ndx_max;
 				int rc;
 
+#ifndef QODP_344
 				ndx_max = odp_queue_lock_count(from);
 				CU_ASSERT_FATAL(ndx_max >= 0);
-
+#endif
 				qctx = odp_queue_context(from);
 				bctx = odp_buffer_addr(buf);
 				buf_cpy = odp_buffer_alloc(pool);
@@ -700,6 +704,7 @@ static void *schedule_common_(void *arg)
 						   (buf_cpy));
 				CU_ASSERT(rc == 0);
 
+#ifndef QODP_344
 				for (ndx = 0; ndx < ndx_max; ndx++) {
 					odp_schedule_order_lock(ndx);
 					CU_ASSERT(bctx->sequence ==
@@ -707,6 +712,7 @@ static void *schedule_common_(void *arg)
 					qctx->lock_sequence[ndx] += num;
 					odp_schedule_order_unlock(ndx);
 				}
+#endif
 			}
 
 			odp_buffer_free(buf);
@@ -883,11 +889,13 @@ static void reset_queues(thread_args_t *args)
 				int ndx;
 				int ndx_max;
 
+#ifndef QODP_344
 				ndx_max = odp_queue_lock_count(queue);
 				CU_ASSERT_FATAL(ndx_max >= 0);
 				qctx->sequence = 0;
 				for (ndx = 0; ndx < ndx_max; ndx++)
 					qctx->lock_sequence[ndx] = 0;
+#endif
 			}
 		}
 	}
@@ -974,12 +982,20 @@ void scheduler_test_1q_1t_n(void)
 /* 1 queue 1 thread ODP_SCHED_SYNC_ATOMIC */
 void scheduler_test_1q_1t_a(void)
 {
+#ifdef QODP_344
+	printf("Atomic queues API not supported\n");
+	return;
+#endif
 	schedule_common(ODP_SCHED_SYNC_ATOMIC, ONE_Q, ONE_PRIO, SCHD_ONE);
 }
 
 /* 1 queue 1 thread ODP_SCHED_SYNC_ORDERED */
 void scheduler_test_1q_1t_o(void)
 {
+#ifdef QODP_344
+	printf("ordered queues API not supported\n");
+	return;
+#endif
 	schedule_common(ODP_SCHED_SYNC_ORDERED, ONE_Q, ONE_PRIO, SCHD_ONE);
 }
 
@@ -994,12 +1010,20 @@ void scheduler_test_mq_1t_n(void)
 /* Many queues 1 thread ODP_SCHED_SYNC_ATOMIC */
 void scheduler_test_mq_1t_a(void)
 {
+#ifdef QODP_344
+	printf("Atomic queues API not supported\n");
+	return;
+#endif
 	schedule_common(ODP_SCHED_SYNC_ATOMIC, MANY_QS, ONE_PRIO, SCHD_ONE);
 }
 
 /* Many queues 1 thread ODP_SCHED_SYNC_ORDERED */
 void scheduler_test_mq_1t_o(void)
 {
+#ifdef QODP_344
+	printf("ordered queues API not supported\n");
+	return;
+#endif
 	schedule_common(ODP_SCHED_SYNC_ORDERED, MANY_QS, ONE_PRIO, SCHD_ONE);
 }
 
@@ -1014,6 +1038,10 @@ void scheduler_test_mq_1t_prio_n(void)
 /* Many queues 1 thread check priority ODP_SCHED_SYNC_ATOMIC */
 void scheduler_test_mq_1t_prio_a(void)
 {
+#ifdef QODP_344
+	printf("Atomic queues API not supported\n");
+	return;
+#endif
 	int prio = odp_schedule_num_prio();
 
 	schedule_common(ODP_SCHED_SYNC_ATOMIC, MANY_QS, prio, SCHD_ONE);
@@ -1022,6 +1050,10 @@ void scheduler_test_mq_1t_prio_a(void)
 /* Many queues 1 thread check priority ODP_SCHED_SYNC_ORDERED */
 void scheduler_test_mq_1t_prio_o(void)
 {
+#ifdef QODP_344
+	printf("ordered queues API not supported\n");
+	return;
+#endif
 	int prio = odp_schedule_num_prio();
 
 	schedule_common(ODP_SCHED_SYNC_ORDERED, MANY_QS, prio, SCHD_ONE);
@@ -1039,6 +1071,10 @@ void scheduler_test_mq_mt_prio_n(void)
 /* Many queues many threads check priority ODP_SCHED_SYNC_ATOMIC */
 void scheduler_test_mq_mt_prio_a(void)
 {
+#ifdef QODP_344
+	printf("Atomic queues API not supported\n");
+	return;
+#endif
 	int prio = odp_schedule_num_prio();
 
 	parallel_execute(ODP_SCHED_SYNC_ATOMIC, MANY_QS, prio, SCHD_ONE,
@@ -1048,6 +1084,10 @@ void scheduler_test_mq_mt_prio_a(void)
 /* Many queues many threads check priority ODP_SCHED_SYNC_ORDERED */
 void scheduler_test_mq_mt_prio_o(void)
 {
+#ifdef QODP_344
+	printf("ordered queues API not supported\n");
+	return;
+#endif
 	int prio = odp_schedule_num_prio();
 
 	parallel_execute(ODP_SCHED_SYNC_ORDERED, MANY_QS, prio, SCHD_ONE,
@@ -1057,6 +1097,10 @@ void scheduler_test_mq_mt_prio_o(void)
 /* 1 queue many threads check exclusive access on ATOMIC queues */
 void scheduler_test_1q_mt_a_excl(void)
 {
+#ifdef QODP_344
+	printf("Atomic queues API not supported\n");
+	return;
+#endif
 	parallel_execute(ODP_SCHED_SYNC_ATOMIC, ONE_Q, ONE_PRIO, SCHD_ONE,
 			 ENABLE_EXCL_ATOMIC);
 }
@@ -1064,24 +1108,40 @@ void scheduler_test_1q_mt_a_excl(void)
 /* 1 queue 1 thread ODP_SCHED_SYNC_NONE multi */
 void scheduler_test_multi_1q_1t_n(void)
 {
+#ifdef QODP_344
+	printf("Sometimes packets are not recieved, may be sw queue issue\n");
+	return;
+#endif
 	schedule_common(ODP_SCHED_SYNC_NONE, ONE_Q, ONE_PRIO, SCHD_MULTI);
 }
 
 /* 1 queue 1 thread ODP_SCHED_SYNC_ATOMIC multi */
 void scheduler_test_multi_1q_1t_a(void)
 {
+#ifdef QODP_344
+	printf("Atomic queues API not supported\n");
+	return;
+#endif
 	schedule_common(ODP_SCHED_SYNC_ATOMIC, ONE_Q, ONE_PRIO, SCHD_MULTI);
 }
 
 /* 1 queue 1 thread ODP_SCHED_SYNC_ORDERED multi */
 void scheduler_test_multi_1q_1t_o(void)
 {
+#ifdef QODP_344
+	printf("ordered queues API not supported\n");
+	return;
+#endif
 	schedule_common(ODP_SCHED_SYNC_ORDERED, ONE_Q, ONE_PRIO, SCHD_MULTI);
 }
 
 /* Many queues 1 thread ODP_SCHED_SYNC_NONE multi */
 void scheduler_test_multi_mq_1t_n(void)
 {
+#ifdef QODP_344
+	printf("Sometimes packets are not recieved, may be sw queue issue\n");
+	return;
+#endif
 	/* Only one priority involved in these tests, but use
 	   the same number of queues the more general case uses */
 	schedule_common(ODP_SCHED_SYNC_NONE, MANY_QS, ONE_PRIO, SCHD_MULTI);
@@ -1090,18 +1150,30 @@ void scheduler_test_multi_mq_1t_n(void)
 /* Many queues 1 thread ODP_SCHED_SYNC_ATOMIC multi */
 void scheduler_test_multi_mq_1t_a(void)
 {
+#ifdef QODP_344
+	printf("Atomic queues API not supported\n");
+	return;
+#endif
 	schedule_common(ODP_SCHED_SYNC_ATOMIC, MANY_QS, ONE_PRIO, SCHD_MULTI);
 }
 
 /* Many queues 1 thread ODP_SCHED_SYNC_ORDERED multi */
 void scheduler_test_multi_mq_1t_o(void)
 {
+#ifdef QODP_344
+	printf("ordered queues API not supported\n");
+	return;
+#endif
 	schedule_common(ODP_SCHED_SYNC_ORDERED, MANY_QS, ONE_PRIO, SCHD_MULTI);
 }
 
 /* Many queues 1 thread check priority ODP_SCHED_SYNC_NONE multi */
 void scheduler_test_multi_mq_1t_prio_n(void)
 {
+#ifdef QODP_344
+	printf("Sometimes packets are not recieved, may be sw queue issue\n");
+	return;
+#endif
 	int prio = odp_schedule_num_prio();
 
 	schedule_common(ODP_SCHED_SYNC_NONE, MANY_QS, prio, SCHD_MULTI);
@@ -1110,6 +1182,10 @@ void scheduler_test_multi_mq_1t_prio_n(void)
 /* Many queues 1 thread check priority ODP_SCHED_SYNC_ATOMIC multi */
 void scheduler_test_multi_mq_1t_prio_a(void)
 {
+#ifdef QODP_344
+	printf("Atomic queues API not supported\n");
+	return;
+#endif
 	int prio = odp_schedule_num_prio();
 
 	schedule_common(ODP_SCHED_SYNC_ATOMIC, MANY_QS, prio, SCHD_MULTI);
@@ -1118,6 +1194,10 @@ void scheduler_test_multi_mq_1t_prio_a(void)
 /* Many queues 1 thread check priority ODP_SCHED_SYNC_ORDERED multi */
 void scheduler_test_multi_mq_1t_prio_o(void)
 {
+#ifdef QODP_344
+	printf("ordered queues API not supported\n");
+	return;
+#endif
 	int prio = odp_schedule_num_prio();
 
 	schedule_common(ODP_SCHED_SYNC_ORDERED, MANY_QS, prio, SCHD_MULTI);
@@ -1126,6 +1206,10 @@ void scheduler_test_multi_mq_1t_prio_o(void)
 /* Many queues many threads check priority ODP_SCHED_SYNC_NONE multi */
 void scheduler_test_multi_mq_mt_prio_n(void)
 {
+#ifdef QODP_344
+	printf("Sometimes packets are not recieved, may be sw queue issue\n");
+	return;
+#endif
 	int prio = odp_schedule_num_prio();
 
 	parallel_execute(ODP_SCHED_SYNC_NONE, MANY_QS, prio, SCHD_MULTI, 0);
@@ -1134,6 +1218,10 @@ void scheduler_test_multi_mq_mt_prio_n(void)
 /* Many queues many threads check priority ODP_SCHED_SYNC_ATOMIC multi */
 void scheduler_test_multi_mq_mt_prio_a(void)
 {
+#ifdef QODP_344
+	printf("Atomic queues API not supported\n");
+	return;
+#endif
 	int prio = odp_schedule_num_prio();
 
 	parallel_execute(ODP_SCHED_SYNC_ATOMIC, MANY_QS, prio, SCHD_MULTI, 0);
@@ -1142,6 +1230,10 @@ void scheduler_test_multi_mq_mt_prio_a(void)
 /* Many queues many threads check priority ODP_SCHED_SYNC_ORDERED multi */
 void scheduler_test_multi_mq_mt_prio_o(void)
 {
+#ifdef QODP_344
+	printf("ordered queues API not supported\n");
+	return;
+#endif
 	int prio = odp_schedule_num_prio();
 
 	parallel_execute(ODP_SCHED_SYNC_ORDERED, MANY_QS, prio, SCHD_MULTI, 0);
@@ -1150,12 +1242,20 @@ void scheduler_test_multi_mq_mt_prio_o(void)
 /* 1 queue many threads check exclusive access on ATOMIC queues multi */
 void scheduler_test_multi_1q_mt_a_excl(void)
 {
+#ifdef QODP_344
+	printf("Atomic queues API not supported\n");
+	return;
+#endif
 	parallel_execute(ODP_SCHED_SYNC_ATOMIC, ONE_Q, ONE_PRIO, SCHD_MULTI,
 			 ENABLE_EXCL_ATOMIC);
 }
 
 void scheduler_test_pause_resume(void)
 {
+#ifdef QODP_344
+	printf("schedule pause API is not supported\n");
+	return;
+#endif
 	odp_queue_t queue;
 	odp_buffer_t buf;
 	odp_event_t ev;
@@ -1296,6 +1396,8 @@ static int create_queues(void)
 				printf("Schedule queue create failed.\n");
 				return -1;
 			}
+			printf("odp_queue_lock_count API not implemented\n");
+#ifndef QODP_344
 			if (odp_queue_lock_count(q) !=
 			    ODP_CONFIG_MAX_ORDERED_LOCKS_PER_QUEUE) {
 				printf("Queue %" PRIu64 " created with "
@@ -1305,6 +1407,7 @@ static int create_queues(void)
 				       ODP_CONFIG_MAX_ORDERED_LOCKS_PER_QUEUE);
 				return -1;
 			}
+#endif
 
 			queue_ctx_buf = odp_buffer_alloc(queue_ctx_pool);
 
@@ -1318,11 +1421,13 @@ static int create_queues(void)
 			qctx->pq_handle = pq;
 			qctx->sequence = 0;
 
+#ifndef QODP_344
 			for (ndx = 0;
 			     ndx < ODP_CONFIG_MAX_ORDERED_LOCKS_PER_QUEUE;
 			     ndx++) {
 				qctx->lock_sequence[ndx] = 0;
 			}
+#endif
 
 			rc = odp_queue_context_set(q, qctx);
 

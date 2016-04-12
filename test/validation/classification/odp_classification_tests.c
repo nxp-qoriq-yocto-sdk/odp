@@ -614,12 +614,14 @@ void classification_test_pktio_configure(void)
 	/* Configure the Different CoS for the pktio interface */
 	if (TEST_DEFAULT)
 		configure_pktio_default_cos();
+#ifndef QODP_344
 	if (TEST_ERROR)
 		configure_pktio_error_cos();
 	if (TEST_PMR_CHAIN)
 		configure_cls_pmr_chain();
 	if (TEST_L2_QOS)
 		configure_cos_with_l2_priority();
+#endif
 	if (TEST_PMR)
 		configure_pmr_cos();
 	if (TEST_PMR_SET)
@@ -631,12 +633,14 @@ void classification_test_pktio_test(void)
 	/* Test Different CoS on the pktio interface */
 	if (TEST_DEFAULT)
 		test_pktio_default_cos();
+#ifndef QODP_344
 	if (TEST_ERROR)
 		test_pktio_error_cos();
 	if (TEST_PMR_CHAIN)
 		test_cls_pmr_chain();
 	if (TEST_L2_QOS)
 		test_cos_with_l2_priority();
+#endif
 	if (TEST_PMR)
 		test_pmr_cos();
 	if (TEST_PMR_SET)

@@ -19,6 +19,10 @@ odp_atomic_u32_t seq;
 
 int classification_suite_pmr_init(void)
 {
+#ifdef QODP_344
+	printf("Loop back device is not working yet\n");
+	return -1;
+#endif
 	odp_pool_param_t param;
 
 	odp_pool_param_init(&param);

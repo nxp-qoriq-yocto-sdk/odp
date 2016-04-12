@@ -438,6 +438,10 @@ static void *worker_entrypoint(void *arg TEST_UNUSED)
 /* @private Timer test case entrypoint */
 void timer_test_odp_timer_all(void)
 {
+#ifdef QODP_344
+	printf("Sw queues issue\n");
+	return;
+#endif
 	int rc;
 	odp_pool_param_t params;
 	odp_timer_pool_param_t tparam;

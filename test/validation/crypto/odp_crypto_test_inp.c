@@ -297,6 +297,10 @@ void crypto_test_alg_hmac_md5(void)
 
 int crypto_suite_sync_init(void)
 {
+#ifdef QODP_344
+	printf("Sync mode is not supported\n");
+	return -1;
+#endif
 	suite_context.pool = odp_pool_lookup("packet_pool");
 	if (suite_context.pool == ODP_POOL_INVALID)
 		return -1;

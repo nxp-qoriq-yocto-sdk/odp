@@ -96,6 +96,9 @@
 extern "C" {
 #endif
 
+/** @addtogroup odph_header ODPH HEADER
+ *  @{
+ */
 
 #include <odp/std_types.h>
 #include <odp/hints.h>
@@ -103,6 +106,9 @@ extern "C" {
 #include <errno.h>
 #include <sys/queue.h>
 
+/**
+ * Enumerations to define the ring Enqueue/Dequeue behavior.
+ */
 enum odph_ring_queue_behavior {
 	ODPH_RING_QUEUE_FIXED = 0, /**< Enq/Deq a fixed number
 				of items from a ring */
@@ -156,10 +162,10 @@ typedef struct odph_ring {
 } odph_ring_t;
 
 
-#define ODPH_RING_F_SP_ENQ 0x0001 /* The default enqueue is "single-producer".*/
-#define ODPH_RING_F_SC_DEQ 0x0002 /* The default dequeue is "single-consumer".*/
-#define ODPH_RING_QUOT_EXCEED (1 << 31)  /* Quota exceed for burst ops */
-#define ODPH_RING_SZ_MASK  (unsigned)(0x0fffffff) /* Ring size mask */
+#define ODPH_RING_F_SP_ENQ 0x0001 /**< The default enqueue is "single-producer".*/
+#define ODPH_RING_F_SC_DEQ 0x0002 /**< The default dequeue is "single-consumer".*/
+#define ODPH_RING_QUOT_EXCEED (1 << 31)  /**< Quota exceed for burst ops */
+#define ODPH_RING_SZ_MASK  (unsigned)(0x0fffffff) /**< Ring size mask */
 
 
 /**
@@ -174,7 +180,6 @@ typedef struct odph_ring {
  *   The name of the ring.
  * @param count
  *   The size of the ring (must be a power of 2).
- * @param socket_id (dummy, not included : todo)
  * @param flags
  *   An OR of the following:
  *    - RING_F_SP_ENQ: If this flag is set, the default behavior when
@@ -569,6 +574,10 @@ void odph_ring_list_dump(void);
  * initialise ring tailq
  */
 void odph_ring_tailq_init(void);
+
+/**
+ * @}
+ */
 
 #ifdef __cplusplus
 }

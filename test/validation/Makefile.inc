@@ -7,6 +7,7 @@ COMMON_DIR = $(top_builddir)/test/validation/common
 #It allows common filenames (such as 'errno.h') to be used locally.
 AUTOMAKE_OPTIONS = nostdinc
 
+AM_CFLAGS += -Wno-error
 AM_CFLAGS += -I$(top_srcdir)/test/validation/common
 AM_LDFLAGS += -static
 

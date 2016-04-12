@@ -3,6 +3,7 @@ ODP_MODULES = buffer \
 	      config \
 	      cpumask \
 	      crypto \
+	      crypto_proto \
 	      errno \
 	      init \
 	      queue \

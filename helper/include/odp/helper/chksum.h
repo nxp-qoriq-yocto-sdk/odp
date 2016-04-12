@@ -19,6 +19,10 @@ extern "C" {
 
 #include <odp/std_types.h>
 
+/** @addtogroup odph_header ODPH HEADER
+ *  @{
+ */
+
 /**
  * Checksum
  *
@@ -45,6 +49,10 @@ static inline uint16sum_t odp_chksum(void *buffer, int len)
 
 	return  (__odp_force uint16sum_t) result;
 }
+
+/**
+ * @}
+ */
 
 #ifdef __cplusplus
 }

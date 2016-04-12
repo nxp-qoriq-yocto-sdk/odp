@@ -27,6 +27,10 @@ extern "C" {
 #include <pthread.h>
 #include <sys/types.h>
 
+/** @addtogroup odph_header ODPH HEADER
+ *  @{
+ */
+
 /** The thread starting arguments */
 typedef struct {
 	void *(*start_routine) (void *); /**< The function to run */
@@ -120,6 +124,9 @@ int odph_linux_process_fork_n(odph_linux_process_t *proc_tbl,
  */
 int odph_linux_process_wait_n(odph_linux_process_t *proc_tbl, int num);
 
+/**
+ * @}
+ */
 
 #ifdef __cplusplus
 }

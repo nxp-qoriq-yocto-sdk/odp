@@ -74,13 +74,11 @@ int packet_suite_init(void)
 		return -1;
 	odp_pool_print(packet_pool);
 	memcpy(udat, &test_packet_udata, sizeof(struct udata_struct));
-
 	udat = odp_packet_user_area(segmented_test_packet);
 	udat_size = odp_packet_user_area_size(segmented_test_packet);
 	if (udat == NULL || udat_size != sizeof(struct udata_struct))
 		return -1;
 	memcpy(udat, &test_packet_udata, sizeof(struct udata_struct));
-
 	return 0;
 }
 
@@ -139,6 +137,9 @@ void packet_test_alloc_segmented(void)
 			ODP_CONFIG_PACKET_HEADROOM -
 			ODP_CONFIG_PACKET_TAILROOM;
 
+	/* FIXME: Packet should not be allocated of size more than
+	   segment length given during pool creation, if segmentation
+	   is not supported.*/
 	pkt = odp_packet_alloc(packet_pool, len);
 	CU_ASSERT_FATAL(pkt != ODP_PACKET_INVALID);
 	CU_ASSERT(odp_packet_len(pkt) == len);
@@ -216,14 +217,12 @@ void packet_test_context(void)
 	odp_packet_user_ptr_set(pkt, &ptr_test_value);
 	CU_ASSERT(odp_packet_user_ptr(pkt) == &ptr_test_value);
 	odp_packet_user_ptr_set(pkt, prev_ptr);
-
 	udat = odp_packet_user_area(pkt);
 	CU_ASSERT_PTR_NOT_NULL(udat);
 	CU_ASSERT(odp_packet_user_area_size(pkt) ==
 		  sizeof(struct udata_struct));
 	CU_ASSERT(memcmp(udat, &test_packet_udata, sizeof(struct udata_struct))
 		  == 0);
-
 	odp_packet_reset(pkt, packet_len);
 }
 
@@ -231,7 +230,7 @@ void packet_test_layer_offsets(void)
 {
 	odp_packet_t pkt = test_packet;
 	uint8_t *l2_addr, *l3_addr, *l4_addr;
-	uint32_t seg_len;
+	uint32_t seg_len = 0;
 	const uint32_t l2_off = 2;
 	const uint32_t l3_off = l2_off + 14;
 	const uint32_t l4_off = l3_off + 14;
@@ -582,7 +581,6 @@ void packet_test_add_rem_data(void)
 	CU_ASSERT(odp_packet_user_area_size(pkt) ==
 		  sizeof(struct udata_struct));
 	memcpy(udat, &test_packet_udata, sizeof(struct udata_struct));
-
 	offset = pkt_len / 2;
 
 	if (segmentation_supported) {
