@@ -39,7 +39,7 @@ void init_sp_db(void)
 
 int create_sp_db_entry(char *input)
 {
-	int pos = 0;
+	int pos = 0, ret = 0;
 	char *local;
 	char *str;
 	char *save;
@@ -60,8 +60,10 @@ int create_sp_db_entry(char *input)
 	str = local;
 	save = NULL;
 
+	memset(&entry->params, 0, sizeof(proto_params_t));
+	entry->params.proto = -1;
 	/* Parse tokens separated by ':' */
-	while (NULL != (token = strtok_r(str, ":", &save))) {
+	while (!ret && NULL != (token = strtok_r(str, ":", &save))) {
 		str = NULL;  /* reset str for subsequent strtok_r calls */
 
 		/* Parse token based on its position */
@@ -90,11 +92,30 @@ int create_sp_db_entry(char *input)
 			} else if (0 == strcmp(token, "both")) {
 				entry->esp = TRUE;
 				entry->ah = TRUE;
+			} else if (0 == strcmp(token, "proto-esp")) {
+				entry->esp = TRUE;
+				entry->ah = TRUE;
+				entry->params.proto = ODP_IPSEC_ESP;
+			} else {
+				printf("ERROR: \"%s\" Unsupported\n", token);
+				free(local);
+				return -1;
 			}
 			break;
+		case 4:
+			if (ODP_IPSEC_ESP == entry->params.proto) {
+				if (parse_ipsec_proto_named_params(
+				    &entry->params, token)) {
+					free(local);
+					return -1;
+				}
+				break;
+			}
+			/* Fall on the next, in the non protocol case */
 		default:
 			printf("ERROR: extra token \"%s\" at position %d\n",
 			       token, pos);
+			ret = -1;
 			break;
 		}
 
@@ -103,21 +124,28 @@ int create_sp_db_entry(char *input)
 	}
 
 	/* Verify we parsed exactly the number of tokens we expected */
-	if (4 != pos) {
-		printf("ERROR: \"%s\" contains %d tokens, expected 4\n",
-		       input,
-		       pos);
-		free(local);
-		return -1;
+	if (ret < 0) {
+		if (ODP_IPSEC_ESP != entry->params.proto && 4 != pos)
+			printf("ERROR: \"%s\" contains %d tokens, expected 4\n",
+			       input, pos);
+		else if (ODP_IPSEC_ESP == entry->params.proto &&
+			 (4 != pos || 5 != pos))
+			printf("ERROR: \"%s\" contains %d tokens, "
+			       "expected 4 or 5\n",
+			       input, pos);
+	} else {
+		if (ODP_IPSEC_ESP == entry->params.proto) {
+			/* Default values of IPSEC protocol parameters */
+			if (4 == pos)
+				entry->params.esn = FALSE;
+		}
+		/* Add route to the list */
+		sp_db->index++;
+		entry->next = sp_db->list;
+		sp_db->list = entry;
 	}
-
-	/* Add route to the list */
-	sp_db->index++;
-	entry->next = sp_db->list;
-	sp_db->list = entry;
-
 	free(local);
-	return 0;
+	return ret;
 }
 
 void dump_sp_db_entry(sp_db_entry_t *entry)
@@ -125,12 +153,22 @@ void dump_sp_db_entry(sp_db_entry_t *entry)
 	char src_subnet_str[MAX_STRING];
 	char dst_subnet_str[MAX_STRING];
 
-	printf(" %s %s %s %s:%s\n",
-	       ipv4_subnet_str(src_subnet_str, &entry->src_subnet),
-	       ipv4_subnet_str(dst_subnet_str, &entry->dst_subnet),
-	       entry->input ? "in" : "out",
-	       entry->esp ? "esp" : "none",
-	       entry->ah ? "ah" : "none");
+	if (ODP_IPSEC_ESP == entry->params.proto) {
+		printf(" %s %s %s %s\n",
+		       ipv4_subnet_str(src_subnet_str, &entry->src_subnet),
+		       ipv4_subnet_str(dst_subnet_str, &entry->dst_subnet),
+		       entry->input ? "in" : "out",
+		       "proto-esp");
+		printf(" Extended sequence number : %s\n",
+		       entry->params.esn ? "Enabled" : "Disabled");
+	} else {
+		printf(" %s %s %s %s:%s\n",
+		       ipv4_subnet_str(src_subnet_str, &entry->src_subnet),
+		       ipv4_subnet_str(dst_subnet_str, &entry->dst_subnet),
+		       entry->input ? "in" : "out",
+		       entry->esp ? "esp" : "none",
+		       entry->ah ? "ah" : "none");
+	}
 }
 
 void dump_sp_db(void)

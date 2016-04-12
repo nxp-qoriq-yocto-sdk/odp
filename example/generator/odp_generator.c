@@ -103,7 +103,7 @@ static void usage(char *progname);
 static int scan_ip(char *buf, unsigned int *paddr);
 static int scan_mac(char *in, odph_ethaddr_t *des);
 static void tv_sub(struct timeval *recvtime, struct timeval *sendtime);
-static void print_global_stats(int num_workers);
+static void print_global_stats(void);
 
 /**
  * Sleep for the specified amount of milliseconds
@@ -242,7 +242,7 @@ static odp_packet_t pack_udp_pkt(odp_pool_t pool)
 	udp->dst_port = 0;
 	udp->length = odp_cpu_to_be_16(args->appl.payload + ODPH_UDPHDR_LEN);
 	udp->chksum = 0;
-	udp->chksum = odp_cpu_to_be_16(odph_ipv4_udp_chksum(pkt));
+	udp->chksum = odph_ipv4_udp_chksum(pkt);
 
 	return pkt;
 }
@@ -520,6 +520,14 @@ static void print_pkts(int thr, odp_packet_t pkt_tbl[], unsigned len)
 					odp_be_to_cpu_16(icmp->un.echo.sequence)
 					, rtt);
 			} else if (icmp->type == ICMP_ECHO) {
+				/* If the application will receive the ICMP
+				 * request packets in receive mode then ICMP
+				 * counter should be increamented here in order
+				 * to print the statistics correctly.
+				 * Also helpful in our macless testing of ping
+				 * mode.
+				 */
+				odp_atomic_inc_u64(&counters.icmp);
 				rlen += sprintf(msg + rlen,
 						"Icmp Echo Request");
 			}
@@ -584,25 +592,39 @@ static void *gen_recv_thread(void *arg)
  * printing verbose statistics
  *
  */
-static void print_global_stats(int num_workers)
+static void print_global_stats(void)
 {
 	uint64_t start, now, diff;
 	uint64_t pkts, pkts_prev = 0, pps, maximum_pps = 0;
 	int verbose_interval = 20;
 	odp_thrmask_t thrd_mask;
 
-	while (odp_thrmask_worker(&thrd_mask) < num_workers)
+	/* We don't need to wait here for all worker threads.
+	 * If there is atleast one worker thread, then it should also be start
+	 * its working. Also there may be the case that some worker threads
+	 * can complete their job and kill themselves, but others are still in
+	 * the create state. In that case odp_thrmask_worker() API may not
+	 * return the exact total number of created worker threads at any
+	 * time and may remain stuck in the loop forever.
+	 *
+	 * Continuously checking until there is not atleast one worker thread
+	 * created.
+	 */
+	while (!odp_thrmask_worker(&thrd_mask))
 		continue;
 
 	start = odp_time_cycles();
 
-	while (odp_thrmask_worker(&thrd_mask) == num_workers) {
-		if (args->appl.number != -1 &&
-		    odp_atomic_load_u64(&counters.cnt) >=
-		    (unsigned int)args->appl.number) {
-			break;
-		}
-
+	/* During the time interval, any worker thread can kills itself,
+	 * then it will not print any statistics and control will comeback
+	 * from the loop. So atleast a pkts counter print is required after
+	 * the wait time.
+	 *
+	 * printing the verbose statistics until there is atleast one worker
+	 * thread, It will print the statistics atleast once after the time
+	 * interval even there isn't any worker thread.
+	 */
+	while (odp_thrmask_worker(&thrd_mask) || diff) {
 		now = odp_time_cycles();
 		diff = odp_time_diff_cycles(start, now);
 		if (odp_time_cycles_to_ns(diff) <
@@ -610,11 +632,17 @@ static void print_global_stats(int num_workers)
 			continue;
 		}
 
+		diff = 0;
 		start = odp_time_cycles();
 
 		if (args->appl.mode == APPL_MODE_RCV) {
 			pkts = odp_atomic_load_u64(&counters.udp);
 			printf(" total receive(UDP: %" PRIu64 ")\n", pkts);
+			/* ICMP counter print is required here in order
+			 * to check how many ICMP packets are received.
+			 */
+			pkts = odp_atomic_load_u64(&counters.icmp);
+			printf(" total receive(ICMP: %" PRIu64 ")\n", pkts);
 			continue;
 		}
 
@@ -633,6 +661,13 @@ static void print_global_stats(int num_workers)
 			printf(" %" PRIu64 " pps, %" PRIu64 " max pps\n",
 			       pps, maximum_pps);
 			pkts_prev = pkts;
+		}
+
+		if (args->appl.mode != APPL_MODE_PING &&
+				args->appl.number != -1 &&
+		    odp_atomic_load_u64(&counters.cnt) >=
+		    (unsigned int)args->appl.number) {
+			break;
 		}
 	}
 }
@@ -857,7 +892,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	print_global_stats(num_workers);
+	print_global_stats();
 
 	/* Master thread waits for other threads to exit */
 	odph_linux_pthread_join(thread_tbl, num_workers);

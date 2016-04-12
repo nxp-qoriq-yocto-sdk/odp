@@ -23,6 +23,9 @@ extern "C" {
 #define EXAMPLE_DEBUG_PRINT 1
 #endif
 
+#ifndef TRUE
+#define TRUE 1
+#endif
 /**
  * log level.
  */
