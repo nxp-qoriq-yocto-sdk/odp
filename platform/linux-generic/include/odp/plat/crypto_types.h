@@ -41,11 +41,17 @@ enum  odp_cipher_alg {
 	ODP_CIPHER_ALG_NULL,
 	ODP_CIPHER_ALG_DES,
 	ODP_CIPHER_ALG_3DES_CBC,
+	ODP_CIPHER_ALG_AES128_CBC,  /**< AES128 with cipher block chaining */
 };
 
 enum odp_auth_alg {
 	ODP_AUTH_ALG_NULL,
 	ODP_AUTH_ALG_MD5_96,
+	ODP_AUTH_ALG_SHA1_96,/**<SHA1 with 96 bit key */
+	ODP_AUTH_ALG_SHA1_160,/**<SHA1 with 160 bit key */
+	ODP_AUTH_ALG_SHA256_128,/**<SHA256 with 128 bit key */
+	ODP_AUTH_ALG_SHA384_192,/**<SHA384 with 192 bit key */
+	ODP_AUTH_ALG_SHA512_256, /**<SHA512 with 256 bit key */
 };
 
 enum odp_crypto_ses_create_err {

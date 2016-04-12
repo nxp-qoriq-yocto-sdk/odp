@@ -20,10 +20,12 @@ extern "C" {
 #include <odp/std_types.h>
 #include <odp/plat/packet_types.h>
 #include <odp/plat/crypto_types.h>
+#include <odp/api/plat/crypto_ipsec_types.h>
 #include <odp/plat/buffer_types.h>
 #include <odp/plat/pool_types.h>
 #include <odp/queue.h>
 
+#include <odp/plat/crypto_types.h>
 /** @ingroup odp_crypto
  *  @{
  */
@@ -33,6 +35,7 @@ extern "C" {
  */
 
 #include <odp/api/crypto.h>
+#include <odp/api/crypto_ipsec.h>
 
 #ifdef __cplusplus
 }
