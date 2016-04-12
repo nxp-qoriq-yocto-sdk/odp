@@ -55,6 +55,8 @@ AX_VALGRIND_CHECK
 AS_CASE([$host],
   [x86*], [ARCH=x86],
   [mips64*], [ARCH=mips64],
+  [aarch64*], [ARCH=aarch64],
+  [powerpc*], [ARCH=powerpc],
   [ARCH=linux]
 )
 AC_SUBST([ARCH])
@@ -71,14 +73,19 @@ AC_SUBST(ODP_LIBSO_VERSION)
 ##########################################################################
 AC_ARG_WITH([platform],
     [AS_HELP_STRING([--with-platform=platform],
-        [select platform to be used, default linux-generic])],
-    [],
-    [with_platform=linux-generic
-    ])
+        [select platform to be used (linux-dpaa1|linux-dpaa2)])]
+    )
 
 AC_SUBST([with_platform])
 AC_SUBST([platform_with_platform], ["platform/${with_platform}"])
 AC_SUBST([platform_with_platform_test], ["platform/${with_platform}/test"])
+AM_CONDITIONAL([BUILD_DPAA2], [test x${with_platform} = x"linux-dpaa2" ])
+AM_CONDITIONAL([BUILD_DPAA1], [test x${with_platform} = x"linux-dpaa1" ])
+
+if test "${with_platform}" == "linux-dpaa1";
+then
+AC_SUBST([platform_with_platform_test], [""])
+fi
 
 ##########################################################################
 # Prepare default values for platform specific optional features
@@ -91,6 +98,12 @@ netmap_support=no
 if test "${with_platform}" == "linux-generic";
 then
     m4_include([./platform/linux-generic/m4/configure.m4])
+elif test "${with_platform}" == "linux-dpaa2";
+then
+    m4_include([./platform/linux-dpaa2/m4/configure.m4])
+elif test "${with_platform}" == "linux-dpaa1";
+then
+    m4_include([./platform/linux-dpaa1/m4/configure.m4])
 else
     echo "UNSUPPORTED PLATFORM: ${with_platform}"
     exit 1
@@ -111,7 +124,6 @@ AC_HELP_STRING([--with-sdk-install-path=DIR path to external libs and headers],
 AC_SUBST(SDK_INSTALL_PATH)
 
 AM_CONDITIONAL([SDK_INSTALL_PATH_], [test "x${SDK_INSTALL_PATH_}" = "x1"])
-
 ##########################################################################
 # Enable/disable Unit tests
 ##########################################################################
@@ -195,11 +207,11 @@ AC_HELP_STRING([--with-cunit-path=DIR   path to CUnit libs and headers],
 ##########################################################################
 # Enable/disable ODP_DEBUG_PRINT
 ##########################################################################
-ODP_DEBUG_PRINT=1
+ODP_DEBUG_PRINT=0
 AC_ARG_ENABLE([debug-print],
     [  --enable-debug-print    display debugging information],
-    [if ! test "x$enableval" = "xyes"; then
-        ODP_DEBUG_PRINT=0
+    [if test "x$enableval" = "xyes"; then
+        ODP_DEBUG_PRINT=1
     fi])
 ODP_CFLAGS="$ODP_CFLAGS -DODP_DEBUG_PRINT=$ODP_DEBUG_PRINT"
 
@@ -212,7 +224,7 @@ AC_ARG_ENABLE([debug],
     [if ! test "x$enableval" = "xyes"; then
         ODP_DEBUG=0
     fi])
-ODP_CFLAGS="$ODP_CFLAGS -DODP_DEBUG=$ODP_DEBUG"
+ODP_CFLAGS="$ODP_CFLAGS -DODP_DEBUG=$ODP_DEBUG -DNADK_AIOP_CI_DEVICE -DNADK_LOGLIB_DISABLE -DQODP_464 -DQODP_344"
 
 ##########################################################################
 # Check for doxygen availability
@@ -270,6 +282,58 @@ else
 fi
 
 AM_CONDITIONAL([cunit_support], [test x$cunit_support = xyes ])
+##########################################################################
+# Adding - DPAA1 required USDPAA dependencies.
+##########################################################################
+
+AC_ARG_WITH([usdpaa-path],
+AC_HELP_STRING([--with-usdpaa-path=DIR path to usdpaa libs and headers],
+             [(or in the default path if not specified).]),
+[USDPAA_PATH=$withval USDPAA_PATH_=1],[USDPAA_PATH_=])
+
+AC_SUBST(USDPAA_PATH)
+
+AM_CONDITIONAL([USDPAA_PATH_], [test "x${USDPAA_PATH_}" = "x1"])
+
+AC_ARG_WITH([fmlib-path],
+AC_HELP_STRING([--with-fmlib-path=DIR path to fm library and headers],
+             [(or in the default path if not specified).]),
+[FMLIB_PATH=$withval FMLIB_PATH_=1],[FMLIB_PATH_=])
+
+AC_SUBST(FMLIB_PATH)
+
+AM_CONDITIONAL([FMLIB_PATH_], [test "x${FMLIB_PATH_}" = "x1"])
+
+##########################################################################
+# Check for Build type (for platforms - DPAA1, DPAA2)
+##########################################################################
+if test "${with_platform}" == "linux-dpaa2";
+then
+AC_ARG_ENABLE([build_type],
+[  --build-type    Specify build type as LS2080/LS2085],
+[case "${enableval}" in
+  ls2080) build_type=LS2080 ;;
+  ls2085) build_type=LS2085 ;;
+  *)  build_type=LS2085;;
+esac],[build_type=LS2085])
+fi
+if test "${with_platform}" == "linux-dpaa1";
+then
+AC_ARG_ENABLE([build_type],
+[  --build-type    Specify build type as LS1043, P4080, T1040, T4240, T2080],
+[case "${enableval}" in
+  ls1043) build_type=LS1043 ;;
+  p4080) build_type=P4080 ;;
+  *)  build_type=LS1043;;
+esac],[build_type=LS1043])
+fi
+AM_CONDITIONAL([BUILD_LS2080], [test x$build_type = xLS2080 ])
+AM_CONDITIONAL([BUILD_LS2085], [test x$build_type = xLS2085 ])
+AM_CONDITIONAL([BUILD_LS1043], [test x$build_type = xLS1043 ])
+AM_CONDITIONAL([LS1043_SOC], [test "x${SOC}" = "xLS1043"])
+AM_CONDITIONAL([P4_SOC], [test "x${SOC}" = "xP4080"])
+AM_CONDITIONAL([T1_SOC], [test "x${SOC}" = "xT1040"])
+AM_CONDITIONAL([T4_SOC], [test "x${SOC}" = "xT4240"])
 
 ##########################################################################
 # Restore old saved variables
@@ -284,7 +348,7 @@ ODP_CFLAGS="$ODP_CFLAGS -W -Wall -Werror -Wstrict-prototypes -Wmissing-prototype
 ODP_CFLAGS="$ODP_CFLAGS -Wmissing-declarations -Wold-style-definition -Wpointer-arith"
 ODP_CFLAGS="$ODP_CFLAGS -Wcast-align -Wnested-externs -Wcast-qual -Wformat-nonliteral"
 ODP_CFLAGS="$ODP_CFLAGS -Wformat-security -Wundef -Wwrite-strings"
-ODP_CFLAGS="$ODP_CFLAGS -std=c99"
+ODP_CFLAGS="$ODP_CFLAGS -std=gnu99"
 # Extra flags for example to suppress certain warning types
 ODP_CFLAGS="$ODP_CFLAGS $ODP_CFLAGS_EXTRA"
 
@@ -318,6 +382,7 @@ AC_CONFIG_FILES([Makefile
 		 test/validation/cpumask/Makefile
 		 test/validation/common/Makefile
 		 test/validation/crypto/Makefile
+		 test/validation/crypto_proto/Makefile
 		 test/validation/errno/Makefile
 		 test/validation/init/Makefile
 		 test/validation/packet/Makefile
@@ -340,6 +405,10 @@ AC_SEARCH_LIBS([timer_create],[rt posix4])
 ##########################################################################
 # distribute the changed variables among the Makefiles
 
+if test "${with_platform}" == "linux-dpaa1";
+then
+AM_LDFLAGS="$AM_LDFLAGS -pthread -lrt"
+fi
 AC_SUBST([LIBS])
 AC_SUBST([AM_CPPFLAGS])
 AC_SUBST([CPPFLAGS])
@@ -371,6 +440,7 @@ AC_MSG_RESULT([
 	ldflags:		${LDFLAGS}
 	am_ldflags:		${AM_LDFLAGS}
 	libs:			${LIBS}
+	build-type:		${build_type}
 	cunit:			${cunit_support}
 	test_vald:		${test_vald}
 	test_perf:		${test_perf}
