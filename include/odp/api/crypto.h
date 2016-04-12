@@ -111,8 +111,6 @@ typedef struct odp_crypto_data_range {
 
 /**
  * Crypto API session creation parameters
- *
- * @todo Add "odp_session_proc_info_t"
  */
 typedef struct odp_crypto_session_params {
 	enum odp_crypto_op op;             /**< Encode versus decode */
@@ -151,8 +149,6 @@ typedef struct odp_crypto_session_params {
 
 /**
  * Crypto API per packet operation parameters
- *
- * @todo Clarify who zero's ICV and how this relates to "hash_result_offset"
  */
 typedef struct odp_crypto_op_params {
 	odp_crypto_session_t session;   /**< Session handle from creation */
@@ -257,6 +253,12 @@ typedef struct odp_crypto_op_result {
 	odp_packet_t pkt;                /**< Output packet */
 	odp_crypto_compl_status_t cipher_status; /**< Cipher status */
 	odp_crypto_compl_status_t auth_status;   /**< Authentication status */
+	int proto_status;		/**< Protocol specific status
+					 * Bit wise errors
+					 * LSB-Bit 0 - if set indicates that
+					 * HFN value matches or exceeds
+					 * HFN threshold
+					 * Others reserved */
 } odp_crypto_op_result_t;
 
 /**
@@ -265,6 +267,11 @@ typedef struct odp_crypto_op_result {
  * @param params            Session parameters
  * @param session           Created session else ODP_CRYPTO_SESSION_INVALID
  * @param status            Failure code if unsuccessful
+ *
+ * @todo pref_mode ODP_CRYPTO_SYNC is not supported.
+ * New buffer mode is not yet supported.
+ * Sessions with requirement of Auth before cipher, are not supported.
+ * odp_crypto_ses_create_err status not supported.
  *
  * @retval 0 on success
  * @retval <0 on failure
@@ -328,6 +335,9 @@ odp_crypto_compl_free(odp_crypto_compl_t completion_event);
  * @param params            Operation parameters
  * @param posted            Pointer to return posted, TRUE for async operation
  * @param result            Results of operation (when posted returns FALSE)
+ *
+ * @todo override_iv_ptr is not valid if session already has a valid IV pointer.
+ * Result(odp_crypto_op_result_t) errors are not supported.
  *
  * @retval 0 on success
  * @retval <0 on failure
