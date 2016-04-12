@@ -5,7 +5,7 @@
  */
 
 /**
- * @mainpage
+ * @mainpage Open Data Plane
  *
  * @section sec_1 Introduction
  *
@@ -26,22 +26,10 @@
  * of the implementation layer is to provide an optimal mapping of ODP
  * APIs to the underlying capabilities (including hardware
  * co-processing and acceleration support) of of SoCs hosting ODP
- * implementations.  As a bootstrapping mechanism for applications, as
- * well as to provide a model for ODP implementers, ODP provides a
- * 'linux-generic' reference implementation designed to run on any SoC
- * which has a Linux kernel.  While linux-generic is not a performance
- * target, it does provide a starting point for ODP implementers and
- * application programmers alike.  As a pure software implementation
- * of ODP, linux-generic is designed to provide best-in-class performance
- * for general Linux data plane support.
+ * implementations. Freescale has implemented 'linux-dpaa2' as a an
+ * implementation layer for ODP applications on DPAA2 platforms.
  *
  * @section contact Contact Details
- * - The main web site is http://www.opendataplane.org/
- * - The git repo is https://git.linaro.org/lng/odp.git
- * - Bug tracking is https://bugs.linaro.org/buglist.cgi?product=OpenDataPlane
+ * - The ODP Open source web site is http://www.opendataplane.org/
  *
- */
-
-/**@page contributing Contributing Guide Lines
- * @verbinclude CONTRIBUTING
  */

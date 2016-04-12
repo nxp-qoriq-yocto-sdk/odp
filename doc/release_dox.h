@@ -58,8 +58,4 @@ The API odp_version_impl_str() returns a platform specific version string define
 The intent of this string is to provide a unique identifier of the service level or build number of the implementation.
 Implementations should change this for each change they make (e.g., bug fix, performance improvement, etc.).
 It is recommended that this be in a format suitable for logging for serviceability tracking.
-
-This affects
-- The implementation
-- In the case of linux-generic it also covers the test & validation suite.
 */
