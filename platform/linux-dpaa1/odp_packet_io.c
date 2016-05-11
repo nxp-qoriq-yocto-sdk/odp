@@ -1252,3 +1252,12 @@ void odp_pktio_param_init(odp_pktio_param_t *params)
 {
 	memset(params, 0, sizeof(odp_pktio_param_t));
 }
+
+int odp_pktio_stats(odp_pktio_t pktio,
+		    odp_pktio_stats_t *stats)
+{
+	/*TODO: API needs to be implemented. Currently stats are
+		set to 0.*/
+	memset(stats, 0, sizeof(odp_pktio_stats_t));
+	return 0;
+}

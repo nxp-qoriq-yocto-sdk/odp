@@ -9,9 +9,8 @@
 <cfgdata>
     <config>
 	<engine name="fm0">
-                <port type="OFFLINE" number="1" policy="hash_ipv4_src_dst_policy6"/>
-                <port type="MAC" number="3" policy="hash_ipv4_src_dst_policy6"/>
-                <port type="MAC" number="4" policy="hash_ipv4_src_dst_policy6"/>
+                <port type="MAC" number="3" policy="hash_ipsec_src_dst_spi_policy2"/>
+                <port type="MAC" number="4" policy="hash_ipsec_src_dst_spi_policy3"/>
 	</engine>
     </config>
 </cfgdata>

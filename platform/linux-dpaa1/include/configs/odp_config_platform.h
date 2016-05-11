@@ -85,6 +85,6 @@
 /**
  * Maximum number of crypto sessions
  */
-#define ODP_CONFIG_CRYPTO_SES   64
+#define ODP_CONFIG_CRYPTO_SES   256
 
 #endif

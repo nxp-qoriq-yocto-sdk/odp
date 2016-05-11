@@ -251,16 +251,14 @@ static int cpuinfo_arm(FILE *file, odp_system_info_t *sysinfo)
 
 static int clk_summary_arm(FILE *file, odp_system_info_t *sysinfo)
 {
-	char		str[128], *pos;
-	int		nu;
+	char		str[128];
 
-	while (fgets(str, sizeof(str), file) != NULL) {
-		if ((pos = strstr(str, "cluster1-clk")) == NULL)
-			continue;
-		sscanf(pos, "cluster1-clk %d %d %ld %d %d",
-		       &nu, &nu, &sysinfo->cpu_hz, &nu, &nu);
+	if (fgets(str, sizeof(str), file) != NULL) {
+		/* Read cpu current frequency in KHz */
+		sscanf(str, "%li", &sysinfo->cpu_hz);
+		/* Converting freq into Hz */
+		sysinfo->cpu_hz *= 1000;
 	}
-
 	return 0;
 }
 #endif
@@ -314,9 +312,9 @@ int odp_system_info_init(void)
 	fclose(file);
 
 #if defined __arm__ || defined __aarch64__
-	file = fopen("/sys/kernel/debug/clk/clk_summary", "rt");
+	file = fopen("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq", "rt");
 	if (file == NULL) {
-		ODP_ERR("Failed to open /sys/kernel/debug/clk/clk_summary\n");
+		ODP_ERR("Failed to open /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq\n");
 		return -1;
 	}
 

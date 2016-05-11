@@ -126,7 +126,7 @@ int odp_schedule_init_local(uint32_t sdqcr)
 	odp_spinlock_unlock(&sched->grp_lock);
 
        /* by default enable channels scheduling within worker group */
-	if (odp_cpu_id())
+	if (odp_thread_id())
 		qman_static_dequeue_add(sched_local.sdqcr);
 
 #if defined (ODP_SCHED_FAIR) && defined (ODP_ATOMIC_SCHED_FAIR)

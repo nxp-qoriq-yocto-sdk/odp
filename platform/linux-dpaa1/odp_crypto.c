@@ -91,7 +91,7 @@ static inline uint32_t caam_cipher_alg(enum odp_cipher_alg odp_alg)
 		return OP_ALG_ALGSEL_DES;
 	case ODP_CIPHER_ALG_3DES_CBC:
 		return OP_ALG_ALGSEL_3DES;
-	case ODP_CIPHER_ALG_AES_CBC:
+	case ODP_CIPHER_ALG_AES128_CBC:
 		return OP_ALG_ALGSEL_AES;
 	default:
 		return 0;
@@ -326,6 +326,10 @@ static enum qman_cb_dqrr_result crypto_ipsec_dqrr_cb_inp(
 	struct op_compl_event *ev = odp_buffer_addr(compl_ev);
 	crypto_ses_entry_t *ses = sgp->ses;
 	odp_buffer_hdr_t *out_bufhdr;
+	odph_ipv4hdr_t *ip;
+	uint32_t	len;
+	void	*data;
+	odph_esptrl_t   *esp_t;
 
 	ev->status = dqrr->fd.status;
 	/*TODO - handle error */
@@ -339,6 +343,14 @@ static enum qman_cb_dqrr_result crypto_ipsec_dqrr_cb_inp(
 
 	/* Adjust output packet length */
 	packet_set_len(sgp->in_pkt, sg->length + sg->offset);
+
+	/* For decrypted packet remove padding */
+	if (ses->s.op == ODP_CRYPTO_OP_DECODE) {
+		ip = (odph_ipv4hdr_t *)odp_packet_l3_ptr(sgp->in_pkt, NULL);
+		data = odp_packet_l2_ptr(sgp->in_pkt, &len);
+		esp_t = (odph_esptrl_t *)((uint8_t *)(data) + len) - 1;
+		odp_packet_pull_tail(sgp->in_pkt, esp_t->pad_len + sizeof(*esp_t));
+	}
 
 	odp_queue_set_input(_odp_packet_to_buffer(ev->out_pkt),
 			    ses->s.compl_queue);
@@ -1644,8 +1656,8 @@ static inline void build_in_ipsec(
 	/* Input frame */
 	data = odp_packet_l2_ptr(params->pkt, &len);
 
-	qm_sg_entry_set64(&sgp->sg[1], __dma_mem_vtop(data + ODPH_ETHHDR_LEN));
-	sgp->sg[1].length = len - ODPH_ETHHDR_LEN;
+	qm_sg_entry_set64(&sgp->sg[1], __dma_mem_vtop(data + params->cipher_range.offset));
+	sgp->sg[1].length = len - params->cipher_range.offset;
 	sgp->sg[1].final = 1;
 
 	cpu_to_hw_sg(&sgp->sg[1]);
@@ -1657,8 +1669,8 @@ static inline void build_out_ipsec(
 	/* Output frame */
 	qm_sg_entry_set64(&sgp->sg[0],
 			__dma_mem_vtop(odp_packet_l2_ptr(params->pkt, NULL)));
-	sgp->sg[0].length = odp_packet_buf_len(params->pkt) - ODPH_ETHHDR_LEN;
-	sgp->sg[0].offset = ODPH_ETHHDR_LEN;
+	sgp->sg[0].length = odp_packet_buf_len(params->pkt) - params->cipher_range.offset;
+	sgp->sg[0].offset = params->cipher_range.offset;
 
 	cpu_to_hw_sg(&sgp->sg[0]);
 }
