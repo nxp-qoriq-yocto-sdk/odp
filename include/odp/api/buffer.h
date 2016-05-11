@@ -117,8 +117,6 @@ void odp_buffer_free(odp_buffer_t buf);
  *
  * @param buf      Buffer handle
  *
- * @todo Implemented only for packet buffers.
- *
  */
 void odp_buffer_print(odp_buffer_t buf);
 

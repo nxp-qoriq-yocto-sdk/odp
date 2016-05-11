@@ -159,8 +159,6 @@ void odp_schedule_resume(void);
  * performance, but user needs to design carefully the split into critical vs.
  * non-critical sections.
  *
- * @todo Not implemented.
- *
  */
 void odp_schedule_release_atomic(void);
 
@@ -195,7 +193,6 @@ void odp_schedule_release_ordered(void);
  *
  * @param num     Number of events to prefetch
  *
- * @todo Not implemented.
  */
 void odp_schedule_prefetch(int num);
 

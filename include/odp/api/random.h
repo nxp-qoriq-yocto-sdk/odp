@@ -30,8 +30,6 @@ extern "C" {
  * @param         size  Size of output buffer
  * @param use_entropy   Use entropy
  *
- * @todo Not implemented.
- *
  * @return Number of bytes written
  * @retval <0 on failure
  */

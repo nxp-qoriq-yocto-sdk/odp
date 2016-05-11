@@ -132,8 +132,6 @@ int odp_cos_queue_set(odp_cos_t cos_id, odp_queue_t queue_id);
 *
 * @retval	ODP_QUEUE_INVALID	on failure
 *
-* @todo Not implemented.
-*
 */
 odp_queue_t odp_cos_queue(odp_cos_t cos_id);
 

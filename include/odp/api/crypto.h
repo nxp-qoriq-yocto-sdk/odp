@@ -268,11 +268,6 @@ typedef struct odp_crypto_op_result {
  * @param session           Created session else ODP_CRYPTO_SESSION_INVALID
  * @param status            Failure code if unsuccessful
  *
- * @todo pref_mode ODP_CRYPTO_SYNC is not supported.
- * New buffer mode is not yet supported.
- * Sessions with requirement of Auth before cipher, are not supported.
- * odp_crypto_ses_create_err status not supported.
- *
  * @retval 0 on success
  * @retval <0 on failure
  */
@@ -335,9 +330,6 @@ odp_crypto_compl_free(odp_crypto_compl_t completion_event);
  * @param params            Operation parameters
  * @param posted            Pointer to return posted, TRUE for async operation
  * @param result            Results of operation (when posted returns FALSE)
- *
- * @todo override_iv_ptr is not valid if session already has a valid IV pointer.
- * Result(odp_crypto_op_result_t) errors are not supported.
  *
  * @retval 0 on success
  * @retval <0 on failure

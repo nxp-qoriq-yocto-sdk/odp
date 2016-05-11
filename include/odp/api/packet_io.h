@@ -329,8 +329,6 @@ int odp_pktio_default_cos_set(odp_pktio_t pktio, odp_cos_t default_cos);
  * @param[in]	error_cos	class-of-service set to all packets arriving
  *				at this ingress port that contain an error.
  *
- * @todo Not implemented.
- *
  * @retval			0 on success
  * @retval			<0 on failure
  *
@@ -361,8 +359,6 @@ int odp_pktio_skip_set(odp_pktio_t pktio, uint32_t offset);
  *				packet data to reserve for use as headroom.
  *				Must not exceed the implementation
  *				defined ODP_PACKET_MAX_HEADROOM.
- *
- * @todo Not implemented.
  *
  * @retval			0 on success
  * @retval			<0 on failure

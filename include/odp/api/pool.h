@@ -172,8 +172,6 @@ int odp_pool_info(odp_pool_t pool, odp_pool_info_t *info);
  *
  * @param pool      Pool handle
  *
- * @todo Only supports Packet pools.
- *
  * @note This routine writes implementation-defined information about the
  * specified pool to the ODP log. The intended use is for debugging.
  */
