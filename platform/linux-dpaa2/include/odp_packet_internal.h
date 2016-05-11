@@ -49,9 +49,9 @@ static inline odp_packet_hdr_t *odp_packet_hdr(odp_packet_t pkt)
 /**
  * Return the Mbuf header
  */
-static inline struct nadk_mbuf *odp_nadk_mbuf_hdr(odp_packet_t pkt)
+static inline struct dpaa2_mbuf *odp_dpaa2_mbuf_hdr(odp_packet_t pkt)
 {
-	return (struct nadk_mbuf *)odp_buf_to_hdr((odp_buffer_t)pkt);
+	return (struct dpaa2_mbuf *)odp_buf_to_hdr((odp_buffer_t)pkt);
 }
 
 /* Convert a buffer handle to a packet handle */

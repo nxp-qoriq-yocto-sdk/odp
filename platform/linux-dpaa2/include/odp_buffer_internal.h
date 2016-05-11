@@ -30,7 +30,7 @@ extern "C" {
 #include <odp_align_internal.h>
 #include <odp/config.h>
 #include <odp/byteorder.h>
-#include <nadk/rts/nadk_mbuf.h>
+#include <odp/plat/sdk/rts/dpaa2_mbuf.h>
 
 #define ODP_BITSIZE(x) \
 	((x) <=     2 ?  1 : \
@@ -93,7 +93,7 @@ typedef union odp_buffer_bits_t {
 struct odp_buffer_hdr_t;
 
 
-typedef struct nadk_mbuf odp_buffer_hdr_t;
+typedef struct dpaa2_mbuf odp_buffer_hdr_t;
 
 static inline odp_buffer_t odp_hdr_to_buf(odp_buffer_hdr_t *hdr)
 {

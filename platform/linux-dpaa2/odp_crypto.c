@@ -23,10 +23,10 @@
 #include <odp_queue_internal.h>
 #include <odp_schedule_internal.h>
 #include <odp/init.h>
-#include <nadk_sec_priv.h>
-#include <nadk_dev_priv.h>
-#include <nadk_mbuf_priv.h>
-#include <nadk_io_portal_priv.h>
+#include <dpaa2_sec_priv.h>
+#include <dpaa2_dev_priv.h>
+#include <dpaa2_mbuf_priv.h>
+#include <dpaa2_io_portal_priv.h>
 #include <odp/helper/ip.h>
 #include <odp/helper/ipsec.h>
 #include <odp/helper/eth.h>
@@ -37,17 +37,20 @@
 #include <string.h>
 #include <pthread.h>
 
-#define ODP_NADK_CRYPTO_MIN_REQ_VQ 1
-#define ODP_NADK_CRYPTO_ENABLE_RX_NOTIF FALSE
+#define ODP_DPAA2_CRYPTO_MIN_REQ_VQ 1
+#define ODP_DPAA2_CRYPTO_ENABLE_RX_NOTIF FALSE
 #define SYNC_MODE_EN 0
+#define RNG_DEV "/dev/urandom"
 
-extern int32_t nadk_sec_dev_list_add(struct nadk_dev *dev);
+extern int32_t dpaa2_sec_dev_list_add(struct dpaa2_dev *dev);
 
 static odp_spinlock_t vq_lock;
 uint8_t avail_vq_mask = 0xff;
 static crypto_ses_table_t *crypto_ses_tbl;
 static odp_spinlock_t lock;
-struct nadk_dev *sec_dev;
+struct dpaa2_dev *sec_dev;
+static int rng_dev_fd = -1;
+
 
 /*
  * @todo This is a serious hack to allow us to use packet buffer to convey
@@ -65,7 +68,7 @@ struct nadk_dev *sec_dev;
 static inline int get_vq_id(void)
 {
 	int n = 0;
-	int max_rx_vq = nadk_dev_get_max_rx_vq(sec_dev);
+	int max_rx_vq = dpaa2_dev_get_max_rx_vq(sec_dev);
 
 	odp_spinlock_lock(&vq_lock);
 	while (!((avail_vq_mask >> n) & 0x01) && n < max_rx_vq)
@@ -107,9 +110,9 @@ static inline void print_desc(uint32_t *buff, int size)
 	}
 }
 
-static int nadk_cipher_init(crypto_ses_entry_t *session)
+static int dpaa2_cipher_init(crypto_ses_entry_t *session)
 {
-	struct nadk_cipher_ctxt *ctxt = &(session->ext_params.cipher_ctxt);
+	struct dpaa2_cipher_ctxt *ctxt = &(session->ext_params.cipher_ctxt);
 	struct alginfo cipherdata;
 	uint8_t dir;
 	unsigned int bufsize;
@@ -119,12 +122,12 @@ static int nadk_cipher_init(crypto_ses_entry_t *session)
 	crypto_vq_t *crypto_vq = qentry->s.priv;
 
 	/* For SEC CIPHER only one descriptor is required. */
-	priv = (struct ctxt_priv *)nadk_data_zmalloc(NULL,
+	priv = (struct ctxt_priv *)dpaa2_data_zmalloc(NULL,
 			sizeof(struct ctxt_priv) + sizeof(struct sec_flc_desc),
 			ODP_CACHE_LINE_SIZE);
 	if (priv == NULL) {
-		NADK_ERR(SEC, "\nNo Memory for priv CTXT");
-		return NADK_FAILURE;
+		DPAA2_ERR(SEC, "\nNo Memory for priv CTXT");
+		return DPAA2_FAILURE;
 	}
 	flc = &priv->flc_desc[0].flc;
 	cipherdata.key = (uint64_t)session->cipher_key.data;
@@ -151,13 +154,13 @@ static int nadk_cipher_init(crypto_ses_entry_t *session)
 	case ODP_CIPHER_ALG_AES_CTR:
 	case ODP_CIPHER_ALG_SNOW_F8:
 	case ODP_CIPHER_ALG_ZUC:
-		NADK_WARN(SEC, "Alg type is supported only for PDCP Offload\n");
-		return NADK_SUCCESS;
+		DPAA2_WARN(SEC, "Alg type is supported only for PDCP Offload\n");
+		return DPAA2_SUCCESS;
 	default:
-		NADK_ERR(SEC, "Invalid Alg type");
-		nadk_data_free(priv);
+		DPAA2_ERR(SEC, "Invalid Alg type");
+		dpaa2_data_free(priv);
 		session->ctxt = NULL;
-		return NADK_FAILURE;
+		return DPAA2_FAILURE;
 	}
 
 	bufsize = cnstr_shdsc_blkcipher(priv->flc_desc[0].desc, 1, 0,
@@ -174,12 +177,12 @@ static int nadk_cipher_init(crypto_ses_entry_t *session)
 			(uint64_t)sec_dev->rx_vq[crypto_vq->vq_id]);
 	session->ctxt = priv;
 
-	return NADK_SUCCESS;
+	return DPAA2_SUCCESS;
 }
 
-static int nadk_auth_init(crypto_ses_entry_t *session)
+static int dpaa2_auth_init(crypto_ses_entry_t *session)
 {
-	struct nadk_auth_ctxt *ctxt = &(session->ext_params.auth_ctxt);
+	struct dpaa2_auth_ctxt *ctxt = &(session->ext_params.auth_ctxt);
 	struct alginfo authdata;
 	unsigned int bufsize;
 	struct ctxt_priv *priv;
@@ -188,12 +191,12 @@ static int nadk_auth_init(crypto_ses_entry_t *session)
 	crypto_vq_t *crypto_vq = qentry->s.priv;
 
 	/* For AUTH three descriptors are required for various stages */
-	priv = (struct ctxt_priv *)nadk_data_zmalloc(NULL,
+	priv = (struct ctxt_priv *)dpaa2_data_zmalloc(NULL,
 			sizeof(struct ctxt_priv) +
 			3 * sizeof(struct sec_flc_desc), ODP_CACHE_LINE_SIZE);
 	if (priv == NULL) {
-		NADK_ERR(SEC, "\nNo memory for priv CTXT");
-		return NADK_FAILURE;
+		DPAA2_ERR(SEC, "\nNo memory for priv CTXT");
+		return DPAA2_FAILURE;
 	}
 
 	authdata.key = (uint64_t)session->auth_key.data;
@@ -231,13 +234,13 @@ static int nadk_auth_init(crypto_ses_entry_t *session)
 	case ODP_AUTH_ALG_AES_CMAC:
 	case ODP_AUTH_ALG_SNOW_3G:
 	case ODP_AUTH_ALG_ZUC:
-		NADK_WARN(SEC, "Alg type is supported only for PDCP Offload\n");
-		return NADK_SUCCESS;
+		DPAA2_WARN(SEC, "Alg type is supported only for PDCP Offload\n");
+		return DPAA2_SUCCESS;
 	default:
-		NADK_ERR(SEC, "Invalid ALG TYPE: %d", session->auth_alg);
-		nadk_data_free(priv);
+		DPAA2_ERR(SEC, "Invalid ALG TYPE: %d", session->auth_alg);
+		dpaa2_data_free(priv);
 		session->ctxt = NULL;
-		return NADK_FAILURE;
+		return DPAA2_FAILURE;
 	}
 
 	bufsize = cnstr_shdsc_hmac(priv->flc_desc[DESC_INITFINAL].desc,
@@ -250,12 +253,12 @@ static int nadk_auth_init(crypto_ses_entry_t *session)
 	flc->word3_rflc_63_32 = upper_32_bits(
 			(uint64_t)sec_dev->rx_vq[crypto_vq->vq_id]);
 	session->ctxt = priv;
-	return NADK_SUCCESS;
+	return DPAA2_SUCCESS;
 }
 
-static int nadk_aead_init(crypto_ses_entry_t *session)
+static int dpaa2_aead_init(crypto_ses_entry_t *session)
 {
-	struct nadk_aead_ctxt *ctxt = &(session->ext_params.aead_ctxt);
+	struct dpaa2_aead_ctxt *ctxt = &(session->ext_params.aead_ctxt);
 	struct ctxt_priv *priv;
 	unsigned int bufsize;
 	struct alginfo cipherdata, authdata;
@@ -265,12 +268,12 @@ static int nadk_aead_init(crypto_ses_entry_t *session)
 	crypto_vq_t *crypto_vq = qentry->s.priv;
 
 	/* For Sec AEAD only one descriptor is required. */
-	priv = (struct ctxt_priv *)nadk_data_zmalloc(NULL,
+	priv = (struct ctxt_priv *)dpaa2_data_zmalloc(NULL,
 			sizeof(struct ctxt_priv) + sizeof(struct sec_flc_desc),
 			ODP_CACHE_LINE_SIZE);
 	if (priv == NULL) {
-		NADK_ERR(SEC, "\nNo memory for priv CTXT");
-		return NADK_FAILURE;
+		DPAA2_ERR(SEC, "\nNo memory for priv CTXT");
+		return DPAA2_FAILURE;
 	}
 
 	cipherdata.key = (uint64_t)session->cipher_key.data;
@@ -294,13 +297,13 @@ static int nadk_aead_init(crypto_ses_entry_t *session)
 	case ODP_CIPHER_ALG_AES_CTR:
 	case ODP_CIPHER_ALG_SNOW_F8:
 	case ODP_CIPHER_ALG_ZUC:
-		NADK_WARN(SEC, "Alg type is supported only for PDCP Offload\n");
-		return NADK_SUCCESS;
+		DPAA2_WARN(SEC, "Alg type is supported only for PDCP Offload\n");
+		return DPAA2_SUCCESS;
 	default:
-		NADK_ERR(SEC, "Invalid Alg type");
-		nadk_data_free(priv);
+		DPAA2_ERR(SEC, "Invalid Alg type");
+		dpaa2_data_free(priv);
 		session->ctxt = NULL;
-		return NADK_FAILURE;
+		return DPAA2_FAILURE;
 	}
 
 	switch (session->auth_alg) {
@@ -332,13 +335,13 @@ static int nadk_aead_init(crypto_ses_entry_t *session)
 	case ODP_AUTH_ALG_AES_CMAC:
 	case ODP_AUTH_ALG_SNOW_3G:
 	case ODP_AUTH_ALG_ZUC:
-		NADK_WARN(SEC, "Alg type is supported only for PDCP Offload\n");
-		return NADK_SUCCESS;
+		DPAA2_WARN(SEC, "Alg type is supported only for PDCP Offload\n");
+		return DPAA2_SUCCESS;
 	default:
-		NADK_ERR(SEC, "Invalid Alg type");
-		nadk_data_free(priv);
+		DPAA2_ERR(SEC, "Invalid Alg type");
+		dpaa2_data_free(priv);
 		session->ctxt = NULL;
-		return NADK_FAILURE;
+		return DPAA2_FAILURE;
 	}
 
 	authdata.key = (uint64_t)session->auth_key.data;
@@ -362,12 +365,12 @@ static int nadk_aead_init(crypto_ses_entry_t *session)
 			(uint64_t)sec_dev->rx_vq[crypto_vq->vq_id]);
 	session->ctxt = priv;
 
-	return NADK_SUCCESS;
+	return DPAA2_SUCCESS;
 }
 
-static int nadk_sec_pdcp_uplane_init(crypto_ses_entry_t *session)
+static int dpaa2_sec_pdcp_uplane_init(crypto_ses_entry_t *session)
 {
-	struct nadk_pdcp_ctxt *ctxt = &(session->ext_params.pdcp_ctxt);
+	struct dpaa2_pdcp_ctxt *ctxt = &(session->ext_params.pdcp_ctxt);
 	struct ctxt_priv *priv;
 	unsigned int bufsize;
 	struct alginfo cipherdata;
@@ -377,14 +380,14 @@ static int nadk_sec_pdcp_uplane_init(crypto_ses_entry_t *session)
 
 	/* For Sec Proto only one descriptor is required. */
 	if (session->ctxt == NULL)
-		session->ctxt = (struct ctxt_priv *)nadk_data_zmalloc(NULL,
+		session->ctxt = (struct ctxt_priv *)dpaa2_data_zmalloc(NULL,
 				sizeof(struct ctxt_priv) +
 				sizeof(struct sec_flc_desc),
 				ODP_CACHE_LINE_SIZE);
 
 	if (session->ctxt == NULL) {
-		NADK_ERR(SEC, "\nNo memory for priv CTXT");
-		return NADK_FAILURE;
+		DPAA2_ERR(SEC, "\nNo memory for priv CTXT");
+		return DPAA2_FAILURE;
 	}
 	priv = session->ctxt;
 
@@ -407,7 +410,7 @@ static int nadk_sec_pdcp_uplane_init(crypto_ses_entry_t *session)
 		cipherdata.algtype = PDCP_CIPHER_TYPE_NULL;
 		break;
 	default:
-		NADK_ERR(SEC, "Invalid Cipher Algo");
+		DPAA2_ERR(SEC, "Invalid Cipher Algo");
 		goto out;
 	}
 
@@ -438,15 +441,15 @@ static int nadk_sec_pdcp_uplane_init(crypto_ses_entry_t *session)
 	flc->word3_rflc_63_32 = upper_32_bits(
 			(uint64_t)sec_dev->rx_vq[crypto_vq->vq_id]);
 
-	return NADK_SUCCESS;
+	return DPAA2_SUCCESS;
 out:
-	NADK_ERR(SEC, "Invalid Algo Direction");
-	return NADK_FAILURE;
+	DPAA2_ERR(SEC, "Invalid Algo Direction");
+	return DPAA2_FAILURE;
 }
 
-static int nadk_sec_pdcp_cplane_init(crypto_ses_entry_t *session)
+static int dpaa2_sec_pdcp_cplane_init(crypto_ses_entry_t *session)
 {
-	struct nadk_pdcp_ctxt *ctxt = &(session->ext_params.pdcp_ctxt);
+	struct dpaa2_pdcp_ctxt *ctxt = &(session->ext_params.pdcp_ctxt);
 	struct ctxt_priv *priv;
 	unsigned int bufsize;
 	struct alginfo cipherdata, authdata;
@@ -456,14 +459,14 @@ static int nadk_sec_pdcp_cplane_init(crypto_ses_entry_t *session)
 
 	/* For Sec Proto only one descriptor is required. */
 	if (session->ctxt == NULL)
-		session->ctxt = (struct ctxt_priv *)nadk_data_zmalloc(NULL,
+		session->ctxt = (struct ctxt_priv *)dpaa2_data_zmalloc(NULL,
 				sizeof(struct ctxt_priv) +
 				sizeof(struct sec_flc_desc),
 				ODP_CACHE_LINE_SIZE);
 
 	if (session->ctxt == NULL) {
-		NADK_ERR(SEC, "\nNo memory for priv CTXT");
-		return NADK_FAILURE;
+		DPAA2_ERR(SEC, "\nNo memory for priv CTXT");
+		return DPAA2_FAILURE;
 	}
 	priv = session->ctxt;
 
@@ -485,7 +488,7 @@ static int nadk_sec_pdcp_cplane_init(crypto_ses_entry_t *session)
 		cipherdata.algtype = PDCP_CIPHER_TYPE_NULL;
 		break;
 	default:
-		NADK_ERR(SEC, "Invalid Cipher Algo %d ",
+		DPAA2_ERR(SEC, "Invalid Cipher Algo %d ",
 				session->cipher_alg);
 		goto out;
 	}
@@ -509,7 +512,7 @@ static int nadk_sec_pdcp_cplane_init(crypto_ses_entry_t *session)
 		authdata.algtype = PDCP_AUTH_TYPE_NULL;
 		break;
 	default:
-		NADK_ERR(SEC, "Invalid AUTH Algo %d",
+		DPAA2_ERR(SEC, "Invalid AUTH Algo %d",
 				session->auth_alg);
 		goto out;
 	}
@@ -541,15 +544,15 @@ static int nadk_sec_pdcp_cplane_init(crypto_ses_entry_t *session)
 	flc->word3_rflc_63_32 = upper_32_bits(
 			(uint64_t)sec_dev->rx_vq[crypto_vq->vq_id]);
 
-	return NADK_SUCCESS;
+	return DPAA2_SUCCESS;
 out:
-	NADK_ERR(SEC, "Invalid Algo Direction");
-	return NADK_FAILURE;
+	DPAA2_ERR(SEC, "Invalid Algo Direction");
+	return DPAA2_FAILURE;
 }
 
-static int nadk_ipsec_init(crypto_ses_entry_t *session)
+static int dpaa2_ipsec_init(crypto_ses_entry_t *session)
 {
-	struct nadk_ipsec_ctxt *ctxt = &(session->ext_params.ipsec_ctxt);
+	struct dpaa2_ipsec_ctxt *ctxt = &(session->ext_params.ipsec_ctxt);
 	struct ctxt_priv *priv;
 	unsigned int bufsize;
 	struct alginfo cipherdata, authdata;
@@ -561,14 +564,14 @@ static int nadk_ipsec_init(crypto_ses_entry_t *session)
 
 	/* For Sec Proto only one descriptor is required. */
 	if (session->ctxt == NULL)
-		session->ctxt = (struct ctxt_priv *)nadk_data_zmalloc(NULL,
+		session->ctxt = (struct ctxt_priv *)dpaa2_data_zmalloc(NULL,
 				sizeof(struct ctxt_priv) +
 				sizeof(struct sec_flc_desc),
 				ODP_CACHE_LINE_SIZE);
 
 	if (session->ctxt == NULL) {
-		NADK_ERR(SEC, "\nNo memory for priv CTXT");
-		return NADK_FAILURE;
+		DPAA2_ERR(SEC, "\nNo memory for priv CTXT");
+		return DPAA2_FAILURE;
 	}
 	priv = session->ctxt;
 
@@ -594,7 +597,7 @@ static int nadk_ipsec_init(crypto_ses_entry_t *session)
 			cipherdata.algtype = OP_PCL_IPSEC_NULL;
 			break;
 		default:
-			NADK_ERR(SEC, "Invalid Cipher Algo");
+			DPAA2_ERR(SEC, "Invalid Cipher Algo");
 			goto out;
 	}
 
@@ -624,7 +627,7 @@ static int nadk_ipsec_init(crypto_ses_entry_t *session)
 			authdata.algtype = OP_PCL_IPSEC_HMAC_NULL;
 			break;
 		default:
-			NADK_ERR(SEC, "Invalid AUTH Algo");
+			DPAA2_ERR(SEC, "Invalid AUTH Algo");
 			goto out;
 	}
 
@@ -635,7 +638,7 @@ static int nadk_ipsec_init(crypto_ses_entry_t *session)
 	authdata.key_type = RTA_DATA_IMM;
 	if (session->dir == ODP_CRYPTO_OP_ENCODE) {
 		if (ctxt->iv.length > 128) {
-			NADK_ERR(SEC, "iv len cannot be more than 128 bits");
+			DPAA2_ERR(SEC, "iv len cannot be more than 128 bits");
 			goto out;
 		}
 		memset(&encap_pdb, 0, sizeof(struct ipsec_encap_pdb));
@@ -664,10 +667,10 @@ static int nadk_ipsec_init(crypto_ses_entry_t *session)
 	flc->word3_rflc_63_32 = upper_32_bits(
 			(uint64_t)sec_dev->rx_vq[crypto_vq->vq_id]);
 
-	return NADK_SUCCESS;
+	return DPAA2_SUCCESS;
 out:
-	nadk_data_free(session->ctxt);
-	return NADK_FAILURE;
+	dpaa2_data_free(session->ctxt);
+	return DPAA2_FAILURE;
 }
 
 static int sync_session_create(odp_crypto_session_params_t *params,
@@ -698,7 +701,7 @@ static int sync_session_create(odp_crypto_session_params_t *params,
 	session->cipher_alg = params->cipher_alg;
 	session->auth_alg = params->auth_alg;
 	session->dir = params->op;
-	session->ctxt_type = NADK_SEC_NONE;
+	session->ctxt_type = DPAA2_SEC_NONE;
 	session->compl_queue = params->compl_queue;
 	session->ext_params.null_sec_ctxt.null_ctxt_type = NULL_CRYPTO;
 	*session_out = (odp_crypto_session_t) session;
@@ -716,7 +719,7 @@ int odp_crypto_session_create(odp_crypto_session_params_t *params,
 	int32_t rc;
 	queue_entry_t *qentry;
 	crypto_vq_t *crypto_vq;
-	struct nadk_vq_param vq_cfg;
+	struct dpaa2_vq_param vq_cfg;
 	int k = -1;
 
 	/*Initialize the session with NULL*/
@@ -748,7 +751,7 @@ int odp_crypto_session_create(odp_crypto_session_params_t *params,
 	}
 
 	qentry = queue_to_qentry(params->compl_queue);
-	memset(&vq_cfg, 0, sizeof(struct nadk_vq_param));
+	memset(&vq_cfg, 0, sizeof(struct dpaa2_vq_param));
 	queue_lock(qentry);
 	qentry->s.status = QUEUE_STATUS_SCHED;
 	if (qentry->s.dev_type != ODP_DEV_SEC) {
@@ -777,10 +780,10 @@ int odp_crypto_session_create(odp_crypto_session_params_t *params,
 			vq_cfg.sync = qentry->s.param.sched.sync;
 		}
 
-		nadk_dev_set_vq_handle(crypto_vq->rx_vq,
+		dpaa2_dev_set_vq_handle(crypto_vq->rx_vq,
 				(uint64_t)qentry->s.handle);
-		rc = nadk_dev_setup_rx_vq(sec_dev, k, &vq_cfg);
-		if (NADK_FAILURE == rc) {
+		rc = dpaa2_sec_setup_rx_vq(sec_dev, k, &vq_cfg);
+		if (DPAA2_FAILURE == rc) {
 			qentry->s.dev_type = ODP_DEV_ANY;
 			free_vq_id(crypto_vq->vq_id);
 			free(crypto_vq);
@@ -825,13 +828,13 @@ int odp_crypto_session_create(odp_crypto_session_params_t *params,
 	if (params->cipher_alg != ODP_CIPHER_ALG_NULL
 			&& params->auth_alg == ODP_AUTH_ALG_NULL) {
 
-		struct nadk_cipher_ctxt *cipher_ctxt =
+		struct dpaa2_cipher_ctxt *cipher_ctxt =
 					&(session->ext_params.cipher_ctxt);
 
-		dma_key1 = nadk_data_zmalloc(NULL, params->cipher_key.length,
+		dma_key1 = dpaa2_data_zmalloc(NULL, params->cipher_key.length,
 				ODP_CACHE_LINE_SIZE);
 		if (!dma_key1) {
-			NADK_ERR(APP1, "nadk_data_zmalloc() failed");
+			DPAA2_ERR(APP1, "dpaa2_data_zmalloc() failed");
 			goto key_fail;
 		}
 
@@ -845,10 +848,10 @@ int odp_crypto_session_create(odp_crypto_session_params_t *params,
 		cipher_ctxt->iv.length = params->iv.length;
 
 		if (params->iv.data) {
-			dma_iv = nadk_data_zmalloc(NULL, params->iv.length,
+			dma_iv = dpaa2_data_zmalloc(NULL, params->iv.length,
 					ODP_CACHE_LINE_SIZE);
 			if (!dma_iv) {
-				NADK_ERR(APP1, "nadk_data_zmalloc() failed");
+				DPAA2_ERR(APP1, "dpaa2_data_zmalloc() failed");
 				goto iv_fail;
 			}
 			memcpy(dma_iv, params->iv.data, params->iv.length);
@@ -856,19 +859,19 @@ int odp_crypto_session_create(odp_crypto_session_params_t *params,
 		} else {
 			cipher_ctxt->iv.data = NULL;
 		}
-		if (nadk_cipher_init(session) == NADK_FAILURE) {
-			NADK_ERR(APP1, "nadk_cipher_init_failed\n");
+		if (dpaa2_cipher_init(session) == DPAA2_FAILURE) {
+			DPAA2_ERR(APP1, "dpaa2_cipher_init_failed\n");
 			goto init_fail;
 		}
-		session->ctxt_type = NADK_SEC_CIPHER;
+		session->ctxt_type = DPAA2_SEC_CIPHER;
 
 	} else if (params->cipher_alg == ODP_CIPHER_ALG_NULL
 			&& params->auth_alg != ODP_AUTH_ALG_NULL) {
 
-		dma_key2 = nadk_data_zmalloc(NULL, params->auth_key.length,
+		dma_key2 = dpaa2_data_zmalloc(NULL, params->auth_key.length,
 				ODP_CACHE_LINE_SIZE);
 		if (!dma_key2) {
-			NADK_ERR(APP1, "nadk_data_zmalloc() failed");
+			DPAA2_ERR(APP1, "dpaa2_data_zmalloc() failed");
 			goto key_fail;
 		}
 
@@ -881,48 +884,48 @@ int odp_crypto_session_create(odp_crypto_session_params_t *params,
 		session->auth_key.length = params->auth_key.length;
 		session->dir = params->op;
 
-		if (nadk_auth_init(session) == NADK_FAILURE) {
-			NADK_ERR(APP1, "nadk_auth_init() failed");
+		if (dpaa2_auth_init(session) == DPAA2_FAILURE) {
+			DPAA2_ERR(APP1, "dpaa2_auth_init() failed");
 			goto init_fail;
 		}
-		session->ctxt_type = NADK_SEC_AUTH;
+		session->ctxt_type = DPAA2_SEC_AUTH;
 
 	} else if (params->cipher_alg != ODP_CIPHER_ALG_NULL
 			&& params->auth_alg != ODP_AUTH_ALG_NULL) {
 
-		struct nadk_aead_ctxt *aead_ctxt =
+		struct dpaa2_aead_ctxt *aead_ctxt =
 				&(session->ext_params.aead_ctxt);
 
-		dma_key1 = nadk_data_zmalloc(NULL, params->cipher_key.length,
+		dma_key1 = dpaa2_data_zmalloc(NULL, params->cipher_key.length,
 				ODP_CACHE_LINE_SIZE);
 		if (!dma_key1) {
-			NADK_ERR(APP1, "nadk_data_zmalloc() failed");
+			DPAA2_ERR(APP1, "dpaa2_data_zmalloc() failed");
 			goto key_fail;
 		}
 
 		memcpy(dma_key1, params->cipher_key.data,
 				params->cipher_key.length);
 
-		dma_key2 = nadk_data_zmalloc(NULL, params->auth_key.length,
+		dma_key2 = dpaa2_data_zmalloc(NULL, params->auth_key.length,
 				ODP_CACHE_LINE_SIZE);
 		if (!dma_key2) {
-			NADK_ERR(APP1, "nadk_data_zmalloc() failed");
+			DPAA2_ERR(APP1, "dpaa2_data_zmalloc() failed");
 			goto key2_fail;
 		}
 		memcpy(dma_key2, params->auth_key.data, params->auth_key.length);
 
 		session->cipher_key.data = dma_key1;
 		session->cipher_key.length = params->cipher_key.length;
-		/*TODO align NADK and ODP alg_type*/
+		/*TODO align DPAA2 and ODP alg_type*/
 		session->auth_key.data = dma_key2;
 		session->auth_key.length = params->auth_key.length;
 		aead_ctxt->iv.length = params->iv.length;
 		aead_ctxt->auth_cipher_text = params->auth_cipher_text;
 		if (params->iv.data) {
-			dma_iv = nadk_data_zmalloc(NULL, params->iv.length,
+			dma_iv = dpaa2_data_zmalloc(NULL, params->iv.length,
 					ODP_CACHE_LINE_SIZE);
 			if (!dma_iv) {
-				NADK_ERR(APP1, "nadk_data_zmalloc() failed");
+				DPAA2_ERR(APP1, "dpaa2_data_zmalloc() failed");
 				goto iv_fail;
 			}
 			memcpy(dma_iv, params->iv.data, params->iv.length);
@@ -930,11 +933,11 @@ int odp_crypto_session_create(odp_crypto_session_params_t *params,
 		} else {
 			aead_ctxt->iv.data = NULL;
 		}
-		if (nadk_aead_init(session) == NADK_FAILURE) {
-			NADK_ERR(APP1, "nadk_aead_init_failed\n");
+		if (dpaa2_aead_init(session) == DPAA2_FAILURE) {
+			DPAA2_ERR(APP1, "dpaa2_aead_init_failed\n");
 			goto init_fail;
 		}
-		session->ctxt_type = NADK_SEC_AEAD;
+		session->ctxt_type = DPAA2_SEC_AEAD;
 	} else {
 		ODP_ERR("NO crypto ALGO specified\n");
 		goto config_fail;
@@ -945,11 +948,11 @@ int odp_crypto_session_create(odp_crypto_session_params_t *params,
 	return 0;
 
 init_fail:
-	nadk_data_free((void *)dma_iv);
+	dpaa2_data_free((void *)dma_iv);
 iv_fail:
-	nadk_data_free((void *)dma_key2);
+	dpaa2_data_free((void *)dma_key2);
 key2_fail:
-	nadk_data_free((void *)dma_key1);
+	dpaa2_data_free((void *)dma_key1);
 key_fail:
 config_fail:
 	crypto_vq->num_sessions--;
@@ -968,45 +971,45 @@ int odp_crypto_session_destroy(odp_crypto_session_t session)
 	crypto_ses_entry_t *ses = (crypto_ses_entry_t *)session;
 	queue_entry_t *qentry;
 	crypto_vq_t *crypto_vq = NULL;
-	struct nadk_cipher_ctxt *cipher_ctxt = NULL;
-	struct nadk_aead_ctxt *aead_ctxt = NULL;
-	struct nadk_ipsec_ctxt *ipsec_ctxt = NULL;
+	struct dpaa2_cipher_ctxt *cipher_ctxt = NULL;
+	struct dpaa2_aead_ctxt *aead_ctxt = NULL;
+	struct dpaa2_ipsec_ctxt *ipsec_ctxt = NULL;
 
 	if (!ses || session == ODP_CRYPTO_SESSION_INVALID) {
 		ODP_ERR("Not a valid session");
-		return NADK_FAILURE;
+		return DPAA2_FAILURE;
 	}
 
-	nadk_data_free(ses->ctxt);
+	dpaa2_data_free(ses->ctxt);
 	ses->ctxt = NULL;
 	if (ses->cipher_key.data)
-		nadk_data_free((void *)(ses->cipher_key.data));
+		dpaa2_data_free((void *)(ses->cipher_key.data));
 	if (ses->auth_key.data)
-		nadk_data_free((void *)(ses->auth_key.data));
+		dpaa2_data_free((void *)(ses->auth_key.data));
 
 	switch (ses->ctxt_type) {
-	case NADK_SEC_CIPHER:
+	case DPAA2_SEC_CIPHER:
 
 		cipher_ctxt = &(ses->ext_params.cipher_ctxt);
 
 		if (cipher_ctxt->iv.data)
-			nadk_data_free((void *)(cipher_ctxt->iv.data));
+			dpaa2_data_free((void *)(cipher_ctxt->iv.data));
 		break;
 
-	case NADK_SEC_AEAD:
+	case DPAA2_SEC_AEAD:
 
 		aead_ctxt = &(ses->ext_params.aead_ctxt);
 
 		if (aead_ctxt->iv.data)
-			nadk_data_free((void *)(aead_ctxt->iv.data));
+			dpaa2_data_free((void *)(aead_ctxt->iv.data));
 		break;
 
-	case NADK_SEC_IPSEC:
+	case DPAA2_SEC_IPSEC:
 
 		ipsec_ctxt = &(ses->ext_params.ipsec_ctxt);
 
 		if (ipsec_ctxt->iv.data)
-			nadk_data_free((void *)(ipsec_ctxt->iv.data));
+			dpaa2_data_free((void *)(ipsec_ctxt->iv.data));
 		break;
 	default:
 		break;
@@ -1038,41 +1041,41 @@ int odp_crypto_session_config_ipsec(
 			odp_ipsec_params_t *ipsec_params)
 {
 	crypto_ses_entry_t *ses = (crypto_ses_entry_t *)session;
-	struct nadk_ipsec_ctxt *ipsec_ctxt = &(ses->ext_params.ipsec_ctxt);
+	struct dpaa2_ipsec_ctxt *ipsec_ctxt = &(ses->ext_params.ipsec_ctxt);
 	odp_crypto_iv_t iv;
 
 	if (!ses || session == ODP_CRYPTO_SESSION_INVALID) {
 		ODP_ERR("Not a valid session");
-		return NADK_FAILURE;
+		return DPAA2_FAILURE;
 	}
 
 	/*Backup and clear existing contexts*/
 	switch (ses->ctxt_type) {
-	case NADK_SEC_AEAD:
+	case DPAA2_SEC_AEAD:
 	{
-		struct nadk_aead_ctxt *aead_ctxt = &(ses->ext_params.aead_ctxt);
+		struct dpaa2_aead_ctxt *aead_ctxt = &(ses->ext_params.aead_ctxt);
 
 		iv.data = aead_ctxt->iv.data;
 		iv.length = aead_ctxt->iv.length;
 		break;
 	}
-	case NADK_SEC_AUTH:
+	case DPAA2_SEC_AUTH:
 	{
 		iv.data = NULL;
 		iv.length = 0;
 		break;
 	}
-	case NADK_SEC_CIPHER:
+	case DPAA2_SEC_CIPHER:
 	{
-		struct nadk_cipher_ctxt *cipher_ctxt =
+		struct dpaa2_cipher_ctxt *cipher_ctxt =
 					&(ses->ext_params.cipher_ctxt);
 		iv.data = cipher_ctxt->iv.data;
 		iv.length = cipher_ctxt->iv.length;
 		break;
 	}
-	case NADK_SEC_NONE:
+	case DPAA2_SEC_NONE:
 	{
-		struct nadk_null_sec_ctxt *null_ctxt =
+		struct dpaa2_null_sec_ctxt *null_ctxt =
 					&(ses->ext_params.null_sec_ctxt);
 		null_ctxt->ipsec_mode = ipsec_mode;
 		null_ctxt->spi = ipsec_params->spi;
@@ -1088,7 +1091,7 @@ int odp_crypto_session_config_ipsec(
 		return -1;
 	}
 
-	memset(ipsec_ctxt, 0, sizeof(struct nadk_ipsec_ctxt));
+	memset(ipsec_ctxt, 0, sizeof(struct dpaa2_ipsec_ctxt));
 	ipsec_ctxt->iv.data = iv.data;
 	ipsec_ctxt->iv.length = iv.length;
 	ipsec_ctxt->ipsec_mode = ipsec_mode;
@@ -1096,17 +1099,17 @@ int odp_crypto_session_config_ipsec(
 	memcpy(&ipsec_ctxt->hdr.ip4_hdr,
 	       ipsec_params->out_hdr, ipsec_params->out_hdr_size);
 
-	if (nadk_ipsec_init(ses) == NADK_FAILURE) {
-		ODP_ERR("nadk_sec_proto_init() failed");
+	if (dpaa2_ipsec_init(ses) == DPAA2_FAILURE) {
+		ODP_ERR("dpaa2_sec_proto_init() failed");
 		goto init_fail;
 	}
-	ses->ctxt_type = NADK_SEC_IPSEC;
+	ses->ctxt_type = DPAA2_SEC_IPSEC;
 	return 0;
 
 init_fail:
-	nadk_data_free((void *)ipsec_ctxt->iv.data);
-	nadk_data_free((void *)ses->cipher_key.data);
-	nadk_data_free((void *)ses->auth_key.data);
+	dpaa2_data_free((void *)ipsec_ctxt->iv.data);
+	dpaa2_data_free((void *)ses->cipher_key.data);
+	dpaa2_data_free((void *)ses->auth_key.data);
 	return -1;
 }
 
@@ -1115,42 +1118,42 @@ int odp_crypto_session_config_pdcp(odp_crypto_session_t session,
 				    odp_pdcp_params_t *pdcp_params)
 {
 	crypto_ses_entry_t *ses = (crypto_ses_entry_t *)session;
-	struct nadk_pdcp_ctxt *pdcp_ctxt = &(ses->ext_params.pdcp_ctxt);
+	struct dpaa2_pdcp_ctxt *pdcp_ctxt = &(ses->ext_params.pdcp_ctxt);
 	if (!ses || session == ODP_CRYPTO_SESSION_INVALID) {
 		ODP_ERR("Not a valid session");
-		return NADK_FAILURE;
+		return DPAA2_FAILURE;
 	}
 
 	/*Backup and clear existing contexts*/
 	switch (ses->ctxt_type) {
-	case NADK_SEC_AEAD:
+	case DPAA2_SEC_AEAD:
 	{
-		struct nadk_aead_ctxt *aead_ctxt = &(ses->ext_params.aead_ctxt);
+		struct dpaa2_aead_ctxt *aead_ctxt = &(ses->ext_params.aead_ctxt);
 		if (ODP_PDCP_MODE_CONTROL != pdcp_mode) {
 			ODP_ERR("PDCP User plane mode:only Encyption sessions"
 					" are supported");
-			return NADK_FAILURE;
+			return DPAA2_FAILURE;
 		}
 
 		if (aead_ctxt->iv.data)
-			nadk_data_free(aead_ctxt->iv.data);
+			dpaa2_data_free(aead_ctxt->iv.data);
 		break;
 	}
-	case NADK_SEC_AUTH:
+	case DPAA2_SEC_AUTH:
 	{
 		if (ODP_PDCP_MODE_CONTROL != pdcp_mode) {
 			ODP_ERR("PDCP User plane mode:only Encyption sessions"
 					" are supported");
-			return NADK_FAILURE;
+			return DPAA2_FAILURE;
 		}
 		break;
 	}
-	case NADK_SEC_CIPHER:
+	case DPAA2_SEC_CIPHER:
 	{
-		struct nadk_cipher_ctxt *cipher_ctxt =
+		struct dpaa2_cipher_ctxt *cipher_ctxt =
 					&(ses->ext_params.cipher_ctxt);
 		if (cipher_ctxt->iv.data)
-			nadk_data_free(cipher_ctxt->iv.data);
+			dpaa2_data_free(cipher_ctxt->iv.data);
 		break;
 	}
 	default:
@@ -1158,7 +1161,7 @@ int odp_crypto_session_config_pdcp(odp_crypto_session_t session,
 		return -1;
 	}
 
-	memset(pdcp_ctxt, 0, sizeof(struct nadk_pdcp_ctxt));
+	memset(pdcp_ctxt, 0, sizeof(struct dpaa2_pdcp_ctxt));
 	pdcp_ctxt->pdcp_mode = pdcp_mode;
 	pdcp_ctxt->sn_size = pdcp_params->sn_size;
 	pdcp_ctxt->bearer = pdcp_params->bearer;
@@ -1173,40 +1176,40 @@ int odp_crypto_session_config_pdcp(odp_crypto_session_t session,
 					" bits for control mode");
 			return -1;
 		}
-		if (nadk_sec_pdcp_cplane_init(ses) == NADK_FAILURE) {
-			ODP_ERR("nadk_sec_proto_init() failed");
+		if (dpaa2_sec_pdcp_cplane_init(ses) == DPAA2_FAILURE) {
+			ODP_ERR("dpaa2_sec_proto_init() failed");
 			goto init_fail;
 		}
 	} else {
-		if (nadk_sec_pdcp_uplane_init(ses) == NADK_FAILURE) {
-			ODP_ERR("nadk_sec_proto_init() failed");
+		if (dpaa2_sec_pdcp_uplane_init(ses) == DPAA2_FAILURE) {
+			ODP_ERR("dpaa2_sec_proto_init() failed");
 			goto init_fail;
 		}
 	}
 
-	ses->ctxt_type = NADK_SEC_PDCP;
+	ses->ctxt_type = DPAA2_SEC_PDCP;
 	return 0;
 
 init_fail:
-	nadk_data_free((void *)ses->cipher_key.data);
-	nadk_data_free((void *)ses->auth_key.data);
+	dpaa2_data_free((void *)ses->cipher_key.data);
+	dpaa2_data_free((void *)ses->auth_key.data);
 	return -1;
 }
 
 static inline int build_eq_desc(struct qbman_eq_desc *eqdesc,
-		struct nadk_vq *sec_tx_vq)
+		struct dpaa2_vq *sec_tx_vq)
 {
 	uint64_t eq_storage_phys = NULL;
 
 	/*Prepare enqueue descriptor*/
 	qbman_eq_desc_clear(eqdesc);
-	qbman_eq_desc_set_no_orp(eqdesc, NADK_EQ_RESP_ERR_FQ);
+	qbman_eq_desc_set_no_orp(eqdesc, DPAA2_EQ_RESP_ERR_FQ);
 	qbman_eq_desc_set_response(eqdesc, eq_storage_phys, 0);
 	qbman_eq_desc_set_fq(eqdesc, sec_tx_vq->fqid);
 	return 0;
 }
 
-static inline int build_cipher_fd(crypto_ses_entry_t *session, nadk_mbuf_pt mbuf,
+static inline int build_cipher_fd(crypto_ses_entry_t *session, dpaa2_mbuf_pt mbuf,
 		odp_crypto_data_range_t *range, uint8_t *override_iv_ptr,
 		struct qbman_fd *fd)
 {
@@ -1215,7 +1218,7 @@ static inline int build_cipher_fd(crypto_ses_entry_t *session, nadk_mbuf_pt mbuf
 	struct ctxt_priv *priv;
 	struct qbman_fle *fle, *sge;
 	struct sec_flow_context *flc;
-	struct nadk_cipher_ctxt *cipher_ctxt =
+	struct dpaa2_cipher_ctxt *cipher_ctxt =
 				&(session->ext_params.cipher_ctxt);
 
 	if (override_iv_ptr) {
@@ -1225,79 +1228,79 @@ static inline int build_cipher_fd(crypto_ses_entry_t *session, nadk_mbuf_pt mbuf
 		dma_iv = cipher_ctxt->iv.data;
 	}
 
-	sge = nadk_data_zmalloc(NULL, mem_len, ODP_CACHE_LINE_SIZE);
+	sge = dpaa2_data_zmalloc(NULL, mem_len, ODP_CACHE_LINE_SIZE);
 	if (!sge) {
-		NADK_ERR(SEC, "Failed to allocate fle\n");
+		DPAA2_ERR(SEC, "Failed to allocate fle\n");
 		return -1;
 	}
 	if (override_iv_ptr) {
 		dma_iv = (uint8_t *)(sge+2);
 		memcpy(dma_iv, override_iv_ptr, cipher_ctxt->iv.length);
 	}
-	if ((mbuf->priv_meta_off - NADK_MBUF_HW_ANNOTATION) >=
+	if ((mbuf->priv_meta_off - DPAA2_MBUF_HW_ANNOTATION) >=
 			2*sizeof(struct qbman_fle)) {
-		fle = (struct qbman_fle *)nadk_mbuf_frame_addr(mbuf);
+		fle = (struct qbman_fle *)dpaa2_mbuf_frame_addr(mbuf);
 		memset(fle, 0, 2*sizeof(*fle));
-		NADK_DBG(SEC, "fle not allocated separately");
+		DPAA2_DBG(SEC, "fle not allocated separately");
 	} else {
-		fle = nadk_data_zmalloc(NULL, (2*sizeof(struct qbman_fle)),
+		fle = dpaa2_data_zmalloc(NULL, (2*sizeof(struct qbman_fle)),
 				ODP_CACHE_LINE_SIZE);
 		if (!fle) {
-			NADK_ERR(SEC, "Failed to allocate fle\n");
-			nadk_data_free(sge);
+			DPAA2_ERR(SEC, "Failed to allocate fle\n");
+			dpaa2_data_free(sge);
 			return -1;
 		}
-		NADK_DBG(SEC, "fle allocated separately");
+		DPAA2_DBG(SEC, "fle allocated separately");
 	}
 
 	if (odp_likely(mbuf->bpid < MAX_BPID)) {
-		NADK_SET_FD_BPID(fd, mbuf->bpid);
-		NADK_SET_FLE_BPID(fle, mbuf->bpid);
-		NADK_SET_FLE_BPID((fle+1), mbuf->bpid);
-		NADK_SET_FLE_BPID(sge, mbuf->bpid);
-		NADK_SET_FLE_BPID((sge+1), mbuf->bpid);
+		DPAA2_SET_FD_BPID(fd, mbuf->bpid);
+		DPAA2_SET_FLE_BPID(fle, mbuf->bpid);
+		DPAA2_SET_FLE_BPID((fle+1), mbuf->bpid);
+		DPAA2_SET_FLE_BPID(sge, mbuf->bpid);
+		DPAA2_SET_FLE_BPID((sge+1), mbuf->bpid);
 	} else {
-		NADK_SET_FD_IVP(fd);
-		NADK_SET_FLE_IVP(fle);
-		NADK_SET_FLE_IVP((fle+1));
-		NADK_SET_FLE_IVP(sge);
-		NADK_SET_FLE_IVP((sge+1));
+		DPAA2_SET_FD_IVP(fd);
+		DPAA2_SET_FLE_IVP(fle);
+		DPAA2_SET_FLE_IVP((fle+1));
+		DPAA2_SET_FLE_IVP(sge);
+		DPAA2_SET_FLE_IVP((sge+1));
 	}
 
 	/* Save the shared descriptor */
 	priv = session->ctxt;
 	flc = &priv->flc_desc[0].flc;
 
-	NADK_SET_FD_ADDR(fd, fle);
-	NADK_SET_FD_LEN(fd, (range->length + cipher_ctxt->iv.length));
-	NADK_SET_FD_COMPOUND_FMT(fd);
-	NADK_SET_FD_FLC(fd, ((uint64_t)flc));
+	DPAA2_SET_FD_ADDR(fd, fle);
+	DPAA2_SET_FD_LEN(fd, (range->length + cipher_ctxt->iv.length));
+	DPAA2_SET_FD_COMPOUND_FMT(fd);
+	DPAA2_SET_FD_FLC(fd, ((uint64_t)flc));
 
-	NADK_SET_FLE_ADDR(fle, (mbuf->data + range->offset));
+	DPAA2_SET_FLE_ADDR(fle, (mbuf->data + range->offset));
 	fle->length = range->length;
 
 	fle++;
 
-	NADK_SET_FLE_ADDR(fle, sge);
+	DPAA2_SET_FLE_ADDR(fle, sge);
 	fle->length = range->length + cipher_ctxt->iv.length;
 
-	NADK_SET_FLE_SG_EXT(fle);
+	DPAA2_SET_FLE_SG_EXT(fle);
 
-	NADK_SET_FLE_ADDR(sge, dma_iv);
+	DPAA2_SET_FLE_ADDR(sge, dma_iv);
 	sge->length = cipher_ctxt->iv.length;
 
 	sge++;
-	NADK_SET_FLE_ADDR(sge, mbuf->data + range->offset);
+	DPAA2_SET_FLE_ADDR(sge, mbuf->data + range->offset);
 	sge->length = range->length;
-	NADK_SET_FLE_FIN(sge);
+	DPAA2_SET_FLE_FIN(sge);
 
-	NADK_SET_FLE_FIN(fle);
+	DPAA2_SET_FLE_FIN(fle);
 
 	return 0;
 }
 
 static inline int build_auth_fd(crypto_ses_entry_t *session,
-		nadk_mbuf_pt mbuf,
+		dpaa2_mbuf_pt mbuf,
 		odp_crypto_data_range_t *range,
 		uint32_t hash_result_offset,
 		struct qbman_fd *fd)
@@ -1308,137 +1311,137 @@ static inline int build_auth_fd(crypto_ses_entry_t *session,
 	int icv_len = session->ext_params.auth_ctxt.trunc_len;
 	uint8_t *old_icv;
 
-	if ((mbuf->priv_meta_off - NADK_MBUF_HW_ANNOTATION) >=
+	if ((mbuf->priv_meta_off - DPAA2_MBUF_HW_ANNOTATION) >=
 			2*sizeof(struct qbman_fle)) {
-		fle = (struct qbman_fle *)nadk_mbuf_frame_addr(mbuf);
+		fle = (struct qbman_fle *)dpaa2_mbuf_frame_addr(mbuf);
 		memset(fle, 0, 2*sizeof(*fle));
-		NADK_DBG(SEC, "fle not allocated separately");
+		DPAA2_DBG(SEC, "fle not allocated separately");
 	} else {
-		fle = nadk_data_zmalloc(NULL, (2*sizeof(struct qbman_fle)),
+		fle = dpaa2_data_zmalloc(NULL, (2*sizeof(struct qbman_fle)),
 				ODP_CACHE_LINE_SIZE);
 		if (!fle) {
-			NADK_ERR(SEC, "Failed to allocate fle\n");
+			DPAA2_ERR(SEC, "Failed to allocate fle\n");
 			return -1;
 		}
-		NADK_DBG(SEC, "fle allocated separately");
+		DPAA2_DBG(SEC, "fle allocated separately");
 	}
 
 	if (odp_likely(mbuf->bpid < MAX_BPID)) {
-		NADK_SET_FD_BPID(fd, mbuf->bpid);
-		NADK_SET_FLE_BPID(fle, mbuf->bpid);
-		NADK_SET_FLE_BPID((fle+1), mbuf->bpid);
+		DPAA2_SET_FD_BPID(fd, mbuf->bpid);
+		DPAA2_SET_FLE_BPID(fle, mbuf->bpid);
+		DPAA2_SET_FLE_BPID((fle+1), mbuf->bpid);
 	} else {
-		NADK_SET_FD_IVP(fd);
-		NADK_SET_FLE_IVP(fle);
-		NADK_SET_FLE_IVP((fle+1));
+		DPAA2_SET_FD_IVP(fd);
+		DPAA2_SET_FLE_IVP(fle);
+		DPAA2_SET_FLE_IVP((fle+1));
 	}
 
 	/* Save the shared descriptor */
 	priv = session->ctxt;
 	flc = &priv->flc_desc[2].flc;
-	NADK_SET_FLE_ADDR(fle, (mbuf->data + hash_result_offset));
+	DPAA2_SET_FLE_ADDR(fle, (mbuf->data + hash_result_offset));
 	fle->length = icv_len;
-	NADK_SET_FD_ADDR(fd, fle);
-	NADK_SET_FD_COMPOUND_FMT(fd);
+	DPAA2_SET_FD_ADDR(fd, fle);
+	DPAA2_SET_FD_COMPOUND_FMT(fd);
 	fle++;
 	if (session->dir == ODP_CRYPTO_OP_ENCODE) {
-		NADK_SET_FLE_ADDR(fle, (mbuf->data + range->offset));
-		NADK_SET_FD_LEN(fd, range->length);
+		DPAA2_SET_FLE_ADDR(fle, (mbuf->data + range->offset));
+		DPAA2_SET_FD_LEN(fd, range->length);
 		fle->length = range->length;
 	} else {
-		sge = nadk_data_zmalloc(NULL, (2*sizeof(struct qbman_fle))
+		sge = dpaa2_data_zmalloc(NULL, (2*sizeof(struct qbman_fle))
 				+ icv_len, ODP_CACHE_LINE_SIZE);
 		if (!sge) {
-			NADK_ERR(SEC, "Failed to allocate fle\n");
-			if ((mbuf->priv_meta_off - NADK_MBUF_HW_ANNOTATION) <
+			DPAA2_ERR(SEC, "Failed to allocate fle\n");
+			if ((mbuf->priv_meta_off - DPAA2_MBUF_HW_ANNOTATION) <
 					2*sizeof(struct qbman_fle)) {
-				nadk_data_free(fle);
+				dpaa2_data_free(fle);
 			}
 			return -1;
 		}
 
-		NADK_SET_FLE_SG_EXT(fle);
-		NADK_SET_FLE_ADDR(fle, sge);
-		NADK_SET_FLE_BPID(sge, mbuf->bpid);
-		NADK_SET_FLE_ADDR(sge, (mbuf->data + range->offset));
-		NADK_SET_FD_LEN(fd, range->length+icv_len);
+		DPAA2_SET_FLE_SG_EXT(fle);
+		DPAA2_SET_FLE_ADDR(fle, sge);
+		DPAA2_SET_FLE_BPID(sge, mbuf->bpid);
+		DPAA2_SET_FLE_ADDR(sge, (mbuf->data + range->offset));
+		DPAA2_SET_FD_LEN(fd, range->length+icv_len);
 		sge->length = range->length;
 		sge++;
 		old_icv = (uint8_t *)(sge +1);
 		memcpy(old_icv,	(mbuf->data + hash_result_offset), icv_len);
 		memset((mbuf->data + hash_result_offset), 0, icv_len);
-		NADK_SET_FLE_BPID(sge, mbuf->bpid);
-		NADK_SET_FLE_ADDR(sge, old_icv);
+		DPAA2_SET_FLE_BPID(sge, mbuf->bpid);
+		DPAA2_SET_FLE_ADDR(sge, old_icv);
 		sge->length = icv_len;
 		fle->length = range->length + icv_len;
-		NADK_SET_FLE_FIN(sge);
+		DPAA2_SET_FLE_FIN(sge);
 	}
 
-	NADK_SET_FLE_FIN(fle);
-	NADK_SET_FD_FLC(fd, ((uint64_t)flc));
+	DPAA2_SET_FLE_FIN(fle);
+	DPAA2_SET_FD_FLC(fd, ((uint64_t)flc));
 
 	return 0;
 }
 
-static inline int build_proto_fd(crypto_ses_entry_t *session, nadk_mbuf_pt mbuf,
+static inline int build_proto_fd(crypto_ses_entry_t *session, dpaa2_mbuf_pt mbuf,
 		odp_crypto_data_range_t *range, struct qbman_fd *fd)
 {
 	struct ctxt_priv *priv;
 	struct qbman_fle *fle;
 	struct sec_flow_context *flc;
 
-	if ((mbuf->priv_meta_off - NADK_MBUF_HW_ANNOTATION) >=
+	if ((mbuf->priv_meta_off - DPAA2_MBUF_HW_ANNOTATION) >=
 			2*sizeof(struct qbman_fle)) {
-		fle = (struct qbman_fle *)nadk_mbuf_frame_addr(mbuf);
+		fle = (struct qbman_fle *)dpaa2_mbuf_frame_addr(mbuf);
 		memset(fle, 0, 2*sizeof(*fle));
-		NADK_DBG(SEC, "fle not allocated separately");
+		DPAA2_DBG(SEC, "fle not allocated separately");
 	} else {
-		fle = nadk_data_zmalloc(NULL, (2*sizeof(struct qbman_fle)),
+		fle = dpaa2_data_zmalloc(NULL, (2*sizeof(struct qbman_fle)),
 				ODP_CACHE_LINE_SIZE);
 		if (!fle) {
-			NADK_ERR(SEC, "Failed to allocate fle\n");
+			DPAA2_ERR(SEC, "Failed to allocate fle\n");
 			return -1;
 		}
-		NADK_DBG(SEC, "fle allocated separately");
+		DPAA2_DBG(SEC, "fle allocated separately");
 	}
 
 	if (odp_likely(mbuf->bpid < MAX_BPID)) {
-		NADK_SET_FD_BPID(fd, mbuf->bpid);
-		NADK_SET_FLE_BPID(fle, mbuf->bpid);
-		NADK_SET_FLE_BPID((fle+1), mbuf->bpid);
+		DPAA2_SET_FD_BPID(fd, mbuf->bpid);
+		DPAA2_SET_FLE_BPID(fle, mbuf->bpid);
+		DPAA2_SET_FLE_BPID((fle+1), mbuf->bpid);
 	} else {
-		NADK_SET_FD_IVP(fd);
-		NADK_SET_FLE_IVP(fle);
-		NADK_SET_FLE_IVP((fle+1));
+		DPAA2_SET_FD_IVP(fd);
+		DPAA2_SET_FLE_IVP(fle);
+		DPAA2_SET_FLE_IVP((fle+1));
 	}
 
 	/* Save the shared descriptor */
 	priv = session->ctxt;
 	flc = &priv->flc_desc[0].flc;
-	NADK_SET_FLE_ADDR(fle, mbuf->data + range->offset);
-	fle->length = mbuf->end_off - nadk_mbuf_headroom(mbuf);
+	DPAA2_SET_FLE_ADDR(fle, mbuf->data + range->offset);
+	fle->length = mbuf->end_off - dpaa2_mbuf_headroom(mbuf);
 
-	NADK_SET_FD_ADDR(fd, fle);
-	NADK_SET_FD_LEN(fd, mbuf->frame_len - range->offset);
-	NADK_SET_FD_COMPOUND_FMT(fd);
+	DPAA2_SET_FD_ADDR(fd, fle);
+	DPAA2_SET_FD_LEN(fd, mbuf->frame_len - range->offset);
+	DPAA2_SET_FD_COMPOUND_FMT(fd);
 	fle++;
-	NADK_SET_FLE_ADDR(fle, mbuf->data + range->offset);
+	DPAA2_SET_FLE_ADDR(fle, mbuf->data + range->offset);
 	fle->length = mbuf->frame_len - range->offset;
-	NADK_SET_FLE_FIN(fle);
-	NADK_SET_FD_FLC(fd, ((uint64_t)flc));
+	DPAA2_SET_FLE_FIN(fle);
+	DPAA2_SET_FD_FLC(fd, ((uint64_t)flc));
 
 	return 0;
 }
 
 static inline int build_authenc_fd(crypto_ses_entry_t *session,
-		nadk_mbuf_pt mbuf,
+		dpaa2_mbuf_pt mbuf,
 		odp_crypto_op_params_t *params,
 		struct qbman_fd *fd)
 {
 	struct ctxt_priv *priv;
 	struct qbman_fle *fle, *sge;
 	struct sec_flow_context *flc;
-	struct nadk_aead_ctxt *aead_ctxt = &(session->ext_params.aead_ctxt);
+	struct dpaa2_aead_ctxt *aead_ctxt = &(session->ext_params.aead_ctxt);
 	odp_crypto_data_range_t *c_range = &params->cipher_range;
 	odp_crypto_data_range_t *a_range = &params->auth_range;
 	uint32_t hash_result_offset = params->hash_result_offset;
@@ -1446,48 +1449,61 @@ static inline int build_authenc_fd(crypto_ses_entry_t *session,
 	int icv_len = aead_ctxt->trunc_len;
 	int iv_len = aead_ctxt->iv.length;
 	uint8_t *old_icv;
+	uint8_t *dma_iv = NULL;
+	uint32_t mem_len;
 
-	if ((mbuf->priv_meta_off - NADK_MBUF_HW_ANNOTATION) >=
+	if ((mbuf->priv_meta_off - DPAA2_MBUF_HW_ANNOTATION) >=
 			2*sizeof(struct qbman_fle)) {
-		fle = (struct qbman_fle *)nadk_mbuf_frame_addr(mbuf);
+		fle = (struct qbman_fle *)dpaa2_mbuf_frame_addr(mbuf);
 		memset(fle, 0, 2*sizeof(*fle));
-		NADK_DBG(SEC, "fle not allocated separately");
+		DPAA2_DBG(SEC, "fle not allocated separately");
 	} else {
-		fle = nadk_data_zmalloc(NULL, (2*sizeof(struct qbman_fle)),
+		fle = dpaa2_data_zmalloc(NULL, (2*sizeof(struct qbman_fle)),
 				ODP_CACHE_LINE_SIZE);
 		if (!fle) {
-			NADK_ERR(SEC, "Failed to allocate fle\n");
+			DPAA2_ERR(SEC, "Failed to allocate fle\n");
 			return -1;
 		}
-		NADK_DBG(SEC, "fle allocated separately");
+		DPAA2_DBG(SEC, "fle allocated separately");
+	}
+	if (params->override_iv_ptr) {
+		mem_len = (4*sizeof(struct qbman_fle)) + icv_len + aead_ctxt->iv.length;
+	} else {
+		mem_len = (4*sizeof(struct qbman_fle)) + icv_len;
+		dma_iv = aead_ctxt->iv.data;
 	}
 
-	sge = nadk_data_zmalloc(NULL, (4*sizeof(struct qbman_fle))
-			+ icv_len, ODP_CACHE_LINE_SIZE);
+	sge = dpaa2_data_zmalloc(NULL, mem_len, ODP_CACHE_LINE_SIZE);
 	if (!sge) {
-		NADK_ERR(SEC, "Failed to allocate fle\n");
-		if ((mbuf->priv_meta_off - NADK_MBUF_HW_ANNOTATION) <
+		DPAA2_ERR(SEC, "Failed to allocate fle\n");
+		if ((mbuf->priv_meta_off - DPAA2_MBUF_HW_ANNOTATION) <
 				2*sizeof(struct qbman_fle)) {
-			nadk_data_free(fle);
+			dpaa2_data_free(fle);
 		}
 		return -1;
 	}
+
+	if (params->override_iv_ptr) {
+		dma_iv = ((uint8_t *)(sge+4)) + icv_len;
+		memcpy(dma_iv, params->override_iv_ptr, aead_ctxt->iv.length);
+	}
+
 	if (odp_likely(mbuf->bpid < MAX_BPID)) {
-		NADK_SET_FD_BPID(fd, mbuf->bpid);
-		NADK_SET_FLE_BPID(fle, mbuf->bpid);
-		NADK_SET_FLE_BPID((fle+1), mbuf->bpid);
-		NADK_SET_FLE_BPID(sge, mbuf->bpid);
-		NADK_SET_FLE_BPID((sge+1), mbuf->bpid);
-		NADK_SET_FLE_BPID((sge+2), mbuf->bpid);
-		NADK_SET_FLE_BPID((sge+3), mbuf->bpid);
+		DPAA2_SET_FD_BPID(fd, mbuf->bpid);
+		DPAA2_SET_FLE_BPID(fle, mbuf->bpid);
+		DPAA2_SET_FLE_BPID((fle+1), mbuf->bpid);
+		DPAA2_SET_FLE_BPID(sge, mbuf->bpid);
+		DPAA2_SET_FLE_BPID((sge+1), mbuf->bpid);
+		DPAA2_SET_FLE_BPID((sge+2), mbuf->bpid);
+		DPAA2_SET_FLE_BPID((sge+3), mbuf->bpid);
 	} else {
-		NADK_SET_FD_IVP(fd);
-		NADK_SET_FLE_IVP(fle);
-		NADK_SET_FLE_IVP((fle+1));
-		NADK_SET_FLE_IVP(sge);
-		NADK_SET_FLE_IVP((sge+1));
-		NADK_SET_FLE_IVP((sge+2));
-		NADK_SET_FLE_IVP((sge+3));
+		DPAA2_SET_FD_IVP(fd);
+		DPAA2_SET_FLE_IVP(fle);
+		DPAA2_SET_FLE_IVP((fle+1));
+		DPAA2_SET_FLE_IVP(sge);
+		DPAA2_SET_FLE_IVP((sge+1));
+		DPAA2_SET_FLE_IVP((sge+2));
+		DPAA2_SET_FLE_IVP((sge+3));
 	}
 
 	/* Save the shared descriptor */
@@ -1495,81 +1511,81 @@ static inline int build_authenc_fd(crypto_ses_entry_t *session,
 	flc = &priv->flc_desc[0].flc;
 
 	/* Configure FD as a FRAME LIST */
-	NADK_SET_FD_ADDR(fd, fle);
-	NADK_SET_FD_COMPOUND_FMT(fd);
-	NADK_SET_FD_FLC(fd, ((uint64_t)flc));
+	DPAA2_SET_FD_ADDR(fd, fle);
+	DPAA2_SET_FD_COMPOUND_FMT(fd);
+	DPAA2_SET_FD_FLC(fd, ((uint64_t)flc));
 
 	/* Configure Output FLE with Scatter/Gather Entry */
-	NADK_SET_FLE_ADDR(fle, sge);
+	DPAA2_SET_FLE_ADDR(fle, sge);
 	if (auth_only_len)
-		NADK_SET_FLE_INTERNAL_JD(fle, auth_only_len);
+		DPAA2_SET_FLE_INTERNAL_JD(fle, auth_only_len);
 	fle->length = (session->dir == ODP_CRYPTO_OP_ENCODE) ?
 			(c_range->length + icv_len) : c_range->length;
-	NADK_SET_FLE_SG_EXT(fle);
+	DPAA2_SET_FLE_SG_EXT(fle);
 
 	/* Configure Output SGE for Encap/Decap */
-	NADK_SET_FLE_ADDR(sge, (mbuf->data + c_range->offset));
+	DPAA2_SET_FLE_ADDR(sge, (mbuf->data + c_range->offset));
 	sge->length = c_range->length;
 
 	if (session->dir == ODP_CRYPTO_OP_ENCODE) {
 		sge++;
-		NADK_SET_FLE_ADDR(sge, (mbuf->data + hash_result_offset));
+		DPAA2_SET_FLE_ADDR(sge, (mbuf->data + hash_result_offset));
 		sge->length = icv_len;
-		NADK_SET_FD_LEN(fd, (a_range->length + iv_len));
+		DPAA2_SET_FD_LEN(fd, (a_range->length + iv_len));
 	}
-	NADK_SET_FLE_FIN(sge);
+	DPAA2_SET_FLE_FIN(sge);
 
 	sge++;
 	fle++;
 
 	/* Configure Input FLE with Scatter/Gather Entry */
-	NADK_SET_FLE_ADDR(fle, sge);
-	NADK_SET_FLE_SG_EXT(fle);
-	NADK_SET_FLE_FIN(fle);
+	DPAA2_SET_FLE_ADDR(fle, sge);
+	DPAA2_SET_FLE_SG_EXT(fle);
+	DPAA2_SET_FLE_FIN(fle);
 	fle->length = (session->dir == ODP_CRYPTO_OP_ENCODE) ?
 			(a_range->length + iv_len) :
 			(a_range->length + iv_len + icv_len);
 
 	/* Configure Input SGE for Encap/Decap */
-	NADK_SET_FLE_ADDR(sge, aead_ctxt->iv.data);
+	DPAA2_SET_FLE_ADDR(sge, dma_iv);
 	sge->length = iv_len;
 	sge++;
 
-	NADK_SET_FLE_ADDR(sge, (mbuf->data + a_range->offset));
+	DPAA2_SET_FLE_ADDR(sge, (mbuf->data + a_range->offset));
 	sge->length = a_range->length;
 	if (session->dir == ODP_CRYPTO_OP_DECODE) {
 		sge++;
 		old_icv = (uint8_t *)(sge +1);
 		memcpy(old_icv,	(mbuf->data + hash_result_offset), icv_len);
 		memset((mbuf->data + hash_result_offset), 0, icv_len);
-		NADK_SET_FLE_ADDR(sge, old_icv);
+		DPAA2_SET_FLE_ADDR(sge, old_icv);
 		sge->length = icv_len;
-		NADK_SET_FD_LEN(fd, (a_range->length + icv_len + iv_len));
+		DPAA2_SET_FD_LEN(fd, (a_range->length + icv_len + iv_len));
 	}
-	NADK_SET_FLE_FIN(sge);
+	DPAA2_SET_FLE_FIN(sge);
 	if (auth_only_len) {
-		NADK_SET_FLE_INTERNAL_JD(fle, auth_only_len);
-		NADK_SET_FD_INTERNAL_JD(fd, auth_only_len);
+		DPAA2_SET_FLE_INTERNAL_JD(fle, auth_only_len);
+		DPAA2_SET_FD_INTERNAL_JD(fd, auth_only_len);
 	}
 	return 0;
 }
 
-static inline int process_null_op_with_sync(crypto_ses_entry_t *session, nadk_mbuf_pt mbuf)
+static inline int process_null_op_with_sync(crypto_ses_entry_t *session, dpaa2_mbuf_pt mbuf)
 {
-	struct nadk_null_sec_ctxt *null_ctxt = &(session->ext_params.null_sec_ctxt);
+	struct dpaa2_null_sec_ctxt *null_ctxt = &(session->ext_params.null_sec_ctxt);
 	odph_esphdr_t *esp;
 	odph_esptrl_t *esp_t;
 	odph_ipv4hdr_t *ip_tun, *ip = (odph_ipv4hdr_t *)odp_packet_l3_ptr(mbuf, NULL);
 
 	if (null_ctxt->null_ctxt_type == NULL_CRYPTO) {
 		/*No Operation needs to be done for null Cypto operation.*/
-		return NADK_SUCCESS;
+		return DPAA2_SUCCESS;
 	}
 
 	if (session->dir == ODP_CRYPTO_OP_ENCODE) {
 		if (odp_packet_headroom(mbuf) < (ODPH_ESPHDR_LEN + ODPH_IPV4HDR_LEN)) {
 			ODP_ERR("Insufficient Headroom for NULL AUTH + NULL CIPHER");
-			return NADK_FAILURE;
+			return DPAA2_FAILURE;
 		}
 
 		mbuf->data -= (ODPH_ESPHDR_LEN + ODPH_IPV4HDR_LEN);
@@ -1601,7 +1617,7 @@ static inline int process_null_op_with_sync(crypto_ses_entry_t *session, nadk_mb
 		mbuf->frame_len -= (ODPH_ESPHDR_LEN + ODPH_IPV4HDR_LEN + ODPH_ESPTRL_LEN);
 		mbuf->tot_frame_len = mbuf->frame_len;
 	}
-	return NADK_SUCCESS;
+	return DPAA2_SUCCESS;
 }
 
 int
@@ -1612,7 +1628,7 @@ odp_crypto_operation(odp_crypto_op_params_t *params,
 	crypto_ses_entry_t *session = (crypto_ses_entry_t *) (params->session);
 	odp_event_t completion_event;
 	struct qbman_fd fd;
-	nadk_mbuf_pt mbuf = (nadk_mbuf_pt) params->pkt;
+	dpaa2_mbuf_pt mbuf = (dpaa2_mbuf_pt) params->pkt;
 	int ret, offset = 0;
 	struct qbman_eq_desc eqdesc;
 	struct qbman_swp *swp;
@@ -1623,31 +1639,31 @@ odp_crypto_operation(odp_crypto_op_params_t *params,
 	if (odp_unlikely(!session)) {
 		*posted = 0;
 		ODP_ERR("No Session specified for crypto operation");
-		return NADK_FAILURE;
+		return DPAA2_FAILURE;
 	}
 
 	if (odp_unlikely(params->out_pkt == ODP_PACKET_INVALID ||
 				params->out_pkt != params->pkt)) {
 		*posted = 0;
 		ODP_ERR("only in_place crypto operation supported");
-		return NADK_FAILURE;
+		return DPAA2_FAILURE;
 	}
 
 	memset(&fd, 0, sizeof(struct qbman_fd));
 	switch (session->ctxt_type) {
-	case NADK_SEC_IPSEC:
-	case NADK_SEC_PDCP:
+	case DPAA2_SEC_IPSEC:
+	case DPAA2_SEC_PDCP:
 			offset = params->cipher_range.offset;
 			ret = build_proto_fd(session, mbuf,
 					     &params->cipher_range, &fd);
 			break;
-	case NADK_SEC_CIPHER:
+	case DPAA2_SEC_CIPHER:
 			offset = params->cipher_range.offset;
 			ret = build_cipher_fd(session, mbuf,
 					&params->cipher_range,
 					params->override_iv_ptr, &fd);
 			break;
-	case NADK_SEC_AUTH:
+	case DPAA2_SEC_AUTH:
 			offset = mbuf->frame_len;
 			/* offset need to be adjusted for ENCODE as the out
 			   FD len would be generated ICV len and for DECODE
@@ -1660,18 +1676,18 @@ odp_crypto_operation(odp_crypto_op_params_t *params,
 					params->hash_result_offset,
 					&fd);
 			break;
-	case NADK_SEC_AEAD:
+	case DPAA2_SEC_AEAD:
 			offset = params->cipher_range.offset;
 			ret = build_authenc_fd(session, mbuf,
 					params, &fd);
 			break;
-	case NADK_SEC_NONE:
+	case DPAA2_SEC_NONE:
 			ret = process_null_op_with_sync(session, mbuf);
 			*posted = 0;
 			if (odp_unlikely(ret)) {
 				result->ok = FALSE;
 				ODP_ERR("Improper packet contents for crypto operation");
-				return NADK_FAILURE;
+				return DPAA2_FAILURE;
 			}
 			result->ok = TRUE;
 			result->ctx = params->ctx;
@@ -1690,24 +1706,24 @@ odp_crypto_operation(odp_crypto_op_params_t *params,
 	if (odp_unlikely(ret)) {
 		*posted = 0;
 		ODP_ERR("Improper packet contents for crypto operation");
-		return NADK_FAILURE;
+		return DPAA2_FAILURE;
 	}
 
 	qentry = queue_to_qentry(session->compl_queue);
 	crypto_vq = qentry->s.priv;
 	vq = sec_dev->tx_vq[crypto_vq->vq_id];
-	ret = build_eq_desc(&eqdesc, (struct nadk_vq *) vq);
+	ret = build_eq_desc(&eqdesc, (struct dpaa2_vq *) vq);
 	if (odp_unlikely(ret)) {
 		*posted = 0;
 		ODP_ERR("Improper Queue for Crypto Operation");
-		return NADK_FAILURE;
+		return DPAA2_FAILURE;
 	}
 
 	swp = thread_io_info.dpio_dev->sw_portal;
 	if (odp_unlikely(!swp)) {
 		*posted = 0;
 		ODP_ERR("No portal found");
-		return NADK_FAILURE;
+		return DPAA2_FAILURE;
 	}
 
 	/* Set DCA for freeing DQRR if required. We are saving
@@ -1737,7 +1753,7 @@ odp_crypto_operation(odp_crypto_op_params_t *params,
 		return 0;
 #if SYNC_MODE_EN
 	} else {
-		nadk_mbuf_pt buf_ptr[1];
+		dpaa2_mbuf_pt buf_ptr[1];
 		odp_crypto_op_result_t local_result;
 
 		/* Fill in result */
@@ -1760,7 +1776,7 @@ odp_crypto_operation(odp_crypto_op_params_t *params,
 					session->compl_queue);
 			crypto_vq_t *crypto_vq = qentry->s.priv;
 
-			ret = nadk_receive(sec_dev, crypto_vq->rx_vq, 1,
+			ret = dpaa2_sec_recv(crypto_vq->rx_vq, 1,
 					buf_ptr);
 			if (ret != 0) {
 				break;
@@ -1783,8 +1799,8 @@ odp_crypto_operation(odp_crypto_op_params_t *params,
 		}
 
 		buf_ptr[0]->data -= offset;
-		if (session->ctxt_type == NADK_SEC_IPSEC ||
-				session->ctxt_type == NADK_SEC_PDCP) {
+		if (session->ctxt_type == DPAA2_SEC_IPSEC ||
+				session->ctxt_type == DPAA2_SEC_PDCP) {
 			buf_ptr[0]->frame_len += offset;
 			buf_ptr[0]->tot_frame_len += offset;
 		} else {
@@ -1803,7 +1819,7 @@ odp_crypto_operation(odp_crypto_op_params_t *params,
 int
 odp_crypto_init_global(void)
 {
-	struct nadk_dev *dev;
+	struct dpaa2_dev *dev;
 	odp_shm_t shm;
 	int ret;
 	uint32_t i, max_rx_vq;
@@ -1822,28 +1838,28 @@ odp_crypto_init_global(void)
 
 
 	TAILQ_FOREACH(dev, &device_list, next) {
-		if (NADK_SEC == dev->dev_type) {
+		if (DPAA2_SEC == dev->dev_type) {
 			/* Get Max available RX & TX VQs for this device */
-			max_rx_vq = nadk_dev_get_max_rx_vq(dev);
-			if (max_rx_vq < ODP_NADK_CRYPTO_MIN_REQ_VQ) {
-				NADK_ERR(APP1, "Not enough Resource to run\n");
+			max_rx_vq = dpaa2_dev_get_max_rx_vq(dev);
+			if (max_rx_vq < ODP_DPAA2_CRYPTO_MIN_REQ_VQ) {
+				DPAA2_ERR(APP1, "Not enough Resource to run\n");
 				return -1;
 			}
 			/* Add RX Virtual queues to this device*/
 			for (i = 0; i < max_rx_vq; i++) {
-				nadk_dev_setup_rx_vq(dev, i, NULL);
+				dpaa2_sec_setup_rx_vq(dev, i, NULL);
 			}
-			ret = nadk_dev_start(dev);
-			if (ret == NADK_FAILURE) {
-				NADK_ERR(APP1, "nadk_dev_start_failed\n");
+			ret = dpaa2_sec_start(dev);
+			if (ret == DPAA2_FAILURE) {
+				DPAA2_ERR(APP1, "dpaa2_sec_start_failed\n");
 				return -1;
 			}
 			/*
-			* nadk_sec_dev_list_add - It adds the device
+			* dpaa2_sec_dev_list_add - It adds the device
 			* passed to the SEC list SEC could perform
 			* operation for this device.
 			*/
-			nadk_sec_dev_list_add(dev);
+			dpaa2_sec_dev_list_add(dev);
 			/* Setting up TX VQ after dpni_enable */
 			sec_dev = dev;
 		}
@@ -1852,6 +1868,12 @@ odp_crypto_init_global(void)
 		printf("\n************Warning*************\n");
 		ODP_PRINT("NO SEC device for Application\n");
 	}
+	/* Open RNG device */
+	rng_dev_fd = open(RNG_DEV, O_RDONLY);
+	if (rng_dev_fd < 0) {
+		printf("\n************Warning*************\n");
+		ODP_PRINT("NO RNG device for Application\n");
+	}
 
 	return 0;
 }
@@ -1859,13 +1881,12 @@ odp_crypto_init_global(void)
 int odp_crypto_term_global(void)
 {
 	int ret, rc = 0;
-	struct nadk_dev *dev;
+	struct dpaa2_dev *dev;
 
 	TAILQ_FOREACH(dev, &device_list, next) {
 		switch (dev->dev_type) {
-		case NADK_SEC:
-			nadk_dev_stop(dev);
-			nadk_dev_shutdown(dev);
+		case DPAA2_SEC:
+			dpaa2_sec_stop(dev);
 			break;
 		default:
 			break;
@@ -1878,15 +1899,27 @@ int odp_crypto_term_global(void)
 		rc = -1;
 	}
 
+	ret = close(rng_dev_fd);
+	if (ret < 0) {
+		ODP_ERR("rng_dev_fd close failed\n");
+		rc = -1;
+	}
+
+
 	return rc;
 }
 
 int32_t
 odp_random_data(uint8_t *buf, int32_t len, odp_bool_t use_entropy ODP_UNUSED)
 {
-	/*TODO rc = RAND_bytes(buf, len);*/
-	memset (buf, 0, len);
-	return len;
+	int32_t rlen;
+
+	rlen = read(rng_dev_fd, buf, len);
+
+	if (!rlen)
+		return -1;
+
+	return rlen;
 }
 
 odp_crypto_compl_t odp_crypto_compl_from_event(odp_event_t ev)

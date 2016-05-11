@@ -55,8 +55,8 @@
 #include <odp/time.h>
 #include <odp/timer.h>
 #include <odp_timer_internal.h>
-#include <nadk_timer.h>
-#include <nadk_time.h>
+#include <dpaa2_timer.h>
+#include <dpaa2_time.h>
 
 #define TMO_UNUSED   ((uint64_t)0xFFFFFFFFFFFFFFFF)
 /* TMO_INACTIVE is or-ed with the expiration tick to indicate an expired timer.
@@ -68,6 +68,8 @@
 #else
 #define PREFETCH(ptr) (void)(ptr)
 #endif
+
+#define ODP_TICKS_INVALID ((uint64_t)~0U)
 
 /******************************************************************************
  * Mutual exclusion in the absence of CAS16
@@ -90,7 +92,7 @@ struct worker {
 
 struct worker attr[MAX_CORES];		/*Data for each manager thread*/
 
-static void callback_func_tim(__attribute__((unused)) struct nadk_timer *tim,											__attribute__((unused)) void *arg);
+static void callback_func_tim(__attribute__((unused)) struct dpaa2_timer *tim,											__attribute__((unused)) void *arg);
 
 /******************************************************************************
  * Translation between timeout buffer and timeout header
@@ -128,7 +130,7 @@ struct tim_data {
 	odp_event_t ev;
 };
 
-typedef struct nadk_timer odp_timer;
+typedef struct dpaa2_timer odp_timer;
 
 /*initialize the timer with queue and user_ptr*/
 static void timer_init(odp_timer *tim,
@@ -290,7 +292,7 @@ static inline odp_timer_t timer_alloc(odp_timer_pool *tp,
 		tp->num_alloc++;
 		odp_timer *tim = &tp->timers[index];
 		/* Initialize timer */
-		nadk_timer_init(tim);
+		dpaa2_timer_init(tim);
 		timer_init(tim, queue, user_ptr);
 		if (odp_unlikely(tp->num_alloc >
 				 odp_atomic_load_u32(&tp->high_wm)))
@@ -317,7 +319,7 @@ static inline odp_buffer_t timer_free(odp_timer_pool *tp, uint32_t idx)
 	int i;
 	odp_timer *tim = &tp->timers[idx];
 
-	if (nadk_timer_pending(tim)) {
+	if (dpaa2_timer_pending(tim)) {
 		info = (struct tim_data *)tim->arg;
 		ev = info->ev;
 		buf = odp_buffer_from_event(ev);
@@ -364,7 +366,7 @@ odp_timer_pool_create(const char *name,
 
 void odp_timer_pool_start(void)
 {
-	/* Nothing to do here, timer pools are started by the create call */
+	/* Nothing to do here, timer pools will started by first timer set call */
 }
 
 void odp_timer_pool_destroy(odp_timer_pool_t tpid)
@@ -384,7 +386,7 @@ uint64_t odp_timer_ns_to_tick(odp_timer_pool_t tpid ODP_UNUSED, uint64_t ns)
 
 uint64_t odp_timer_current_tick(odp_timer_pool_t tpid ODP_UNUSED)
 {
-	return nadk_time_get_cycles();
+	return dpaa2_time_get_cycles();
 }
 
 int odp_timer_pool_info(odp_timer_pool_t tpid,
@@ -420,8 +422,8 @@ static void *manage(void *ptr)
 	}
 
 	while (1) {
-		nadk_timer_manage();
-		nadk_usleep(attr->ures);
+		dpaa2_timer_manage();
+		dpaa2_usleep(attr->ures);
 	}
 	return NULL;
 }
@@ -445,7 +447,7 @@ odp_timer_t odp_timer_alloc(odp_timer_pool_t tpid,
 	return hdl;
 }
 
-static void callback_func_tim(__attribute__((unused)) struct nadk_timer *tim,
+static void callback_func_tim(__attribute__((unused)) struct dpaa2_timer *tim,
 				__attribute__((unused)) void *arg)
 {
 	int rc;
@@ -486,7 +488,7 @@ int odp_timer_set_abs(odp_timer_t hdl,
 	int ret;
 
 	tp = handle_to_tp(hdl);
-	lcore_id = nadk_lcore_id();
+	lcore_id = dpaa2_lcore_id();
 	index = handle_to_idx(hdl, tp);
 	tim = &tp->timers[index];
 	info = tim->arg;
@@ -499,13 +501,13 @@ int odp_timer_set_abs(odp_timer_t hdl,
 				(void *(*)(void *))manage,
 				&attr[lcore_id]);
 		if (ret) {
-			NADK_ERR(APP1, "Fail to spawn the thread %lu\n",
+			DPAA2_ERR(APP1, "Fail to spawn the thread %lu\n",
 						attr[lcore_id].id);
 			return ODP_TIMER_INVALID;
 		}
 		core_mask |= check << lcore_id;
 	}
-	cur_tick = nadk_time_get_cycles();
+	cur_tick = dpaa2_time_get_cycles();
 	if (odp_unlikely(abs_tck < cur_tick + tp->min_rel_tck))
 		return ODP_TIMER_TOOEARLY;
 	if (odp_unlikely(abs_tck > cur_tick + tp->max_rel_tck))
@@ -519,7 +521,7 @@ int odp_timer_set_abs(odp_timer_t hdl,
 
 	info->ev = *tmo_ev;
 	*tmo_ev = ODP_EVENT_INVALID;
-	nadk_timer_abs_reset(tim, abs_tck, lcore_id,
+	dpaa2_timer_abs_reset(tim, abs_tck, lcore_id,
 			  callback_func_tim, info);
 	return ODP_TIMER_SUCCESS;
 }
@@ -540,7 +542,7 @@ int odp_timer_set_rel(odp_timer_t hdl,
 	int ret;
 
 	tp = handle_to_tp(hdl);
-	lcore_id = nadk_lcore_id();
+	lcore_id = dpaa2_lcore_id();
 	index = handle_to_idx(hdl, tp);
 	tim = &tp->timers[index];
 	info = tim->arg;
@@ -553,12 +555,18 @@ int odp_timer_set_rel(odp_timer_t hdl,
 				(void *(*)(void *))manage,
 				&attr[lcore_id]);
 		if (ret) {
-			NADK_ERR(APP1, "Fail to spawn the thread %lu\n",
+			DPAA2_ERR(APP1, "Fail to spawn the thread %lu\n",
 						attr[lcore_id].id);
 			return ODP_TIMER_INVALID;
 		}
 		core_mask |= check << lcore_id;
 	}
+
+	if (odp_unlikely(rel_tck < tp->min_rel_tck))
+		return ODP_TIMER_TOOEARLY;
+	if (odp_unlikely(rel_tck > tp->max_rel_tck))
+		return ODP_TIMER_TOOLATE;
+
 	cur_tick = odp_timer_current_tick(tp);
 	tmo = odp_timeout_from_event(*tmo_ev);
 	hdr = (odp_timeout_hdr_t *)tmo;
@@ -568,7 +576,7 @@ int odp_timer_set_rel(odp_timer_t hdl,
 	info->ev = *tmo_ev;
 
 	*tmo_ev = ODP_EVENT_INVALID;
-	nadk_timer_reset(tim, rel_tck, 0, lcore_id,
+	dpaa2_timer_reset(tim, rel_tck, 0, lcore_id,
 			  callback_func_tim, info);
 	return ODP_TIMER_SUCCESS;
 }
@@ -580,12 +588,14 @@ int odp_timer_cancel(odp_timer_t hdl, odp_event_t *tmo_ev)
 	int index = handle_to_idx(hdl, tp);
 	odp_timer *timer = &tp->timers[index];
 
-	if (nadk_timer_pending(timer)) {
+	if (dpaa2_timer_pending(timer)) {
 		info = (struct tim_data *)timer->arg;
 		*tmo_ev = info->ev;
-		nadk_timer_stop(timer);
+		dpaa2_timer_stop(timer);
+		timer->expire = ODP_TICKS_INVALID; /* Invalid expiration ticks */
 		return ODP_TIMER_SUCCESS;
 	} else {
+		timer->expire = ODP_TICKS_INVALID; /* Invalid expiration ticks */
 		ODP_PRINT("Timer already expired or inactive\n");
 		return ODP_TIMER_NOEVENT;
 	}
@@ -615,13 +625,6 @@ odp_event_t odp_timeout_to_event(odp_timeout_t tmo)
 	return odp_buffer_to_event(buf);
 }
 
-int odp_timeout_fresh(odp_timeout_t tmo ODP_UNUSED)
-{
-	/*TODO*/
-	ODP_UNIMPLEMENTED();
-	return 1;
-}
-
 odp_timer_t odp_timeout_timer(odp_timeout_t tmo)
 {
 	const odp_timeout_hdr_t *hdr = (odp_timeout_hdr_t *)tmo;
@@ -639,6 +642,19 @@ void *odp_timeout_user_ptr(odp_timeout_t tmo)
 	const odp_timeout_hdr_t *hdr = (odp_timeout_hdr_t *)tmo;
 	return hdr->user_ptr;
 }
+
+int odp_timeout_fresh(odp_timeout_t tmo)
+{
+	const odp_timeout_hdr_t *hdr = (odp_timeout_hdr_t *)tmo;
+	odp_timer_t tim = hdr->timer;
+	odp_timer_pool *tp = handle_to_tp(tim);
+	int index = handle_to_idx(tim, tp);
+
+	odp_timer *timer = &tp->timers[index];
+
+	return timer->expire == hdr->expiration;
+}
+
 
 odp_timeout_t odp_timeout_alloc(odp_pool_t pool)
 {

@@ -18,9 +18,9 @@
 #include <odp/system_info.h>
 #include <odp/plat/kni/odpfsl_kni_api.h>
 
-#include <nadk/core/nadk_dev.h>
-#include <nadk_kni_common.h>
-#include <nadk_kni.h>
+#include <odp/plat/sdk/main/dpaa2_dev.h>
+#include <odpfsl_kni_common.h>
+#include <odpfsl_kni.h>
 
 #include <odp_debug_internal.h>
 #include <odp_packet_io_internal.h>
@@ -35,7 +35,7 @@
 
 /** @def DEF_KNI_MAX_PKT_SIZE
  * @brief Default size of single Packet for KNI Interface, passed to KNI alloc
- * routine of NADK (nadk_kni_alloc). This is equal to buffer size allocated
+ * routine of DPAA2 (odpfsl_kni_alloc). This is equal to buffer size allocated
  */
 #define DEF_KNI_MAX_PKT_SIZE		2048
 				/* Size of each Packet Buffer =
@@ -239,7 +239,7 @@ odpfsl_knidev_free(odpfsl_knidev_t kdev)
 		kdev_count = kdev_p->nb_kni;
 
 		for (i = 0; i < kdev_count; i++)
-			nadk_kni_release(kdev_p->kni[i]);
+			odpfsl_kni_release(kdev_p->kni[i]);
 
 		free(kdev_p);
 		kdev_p = NULL;
@@ -248,36 +248,36 @@ odpfsl_knidev_free(odpfsl_knidev_t kdev)
 
 
 /**
- * @brief Internal method to extract nadk_dev from pktio structure
+ * @brief Internal method to extract dpaa2_dev from pktio structure
  *
  * Only used internal to odpfsl_kni_api; Takes odp_pktio_t and typecasts it to
- * pktio_entry_t and return pkt_nadk.dev field
+ * pktio_entry_t and return pkt_dpaa2.dev field
  *
- * @param [in] pktio odp_pktio_t type device, from which corresponding NADK
+ * @param [in] pktio odp_pktio_t type device, from which corresponding DPAA2
  *                   device is expected
- * @return nadk_dev extracted NADK device, or NULL
+ * @return dpaa2_dev extracted DPAA2 device, or NULL
  */
-static inline struct nadk_dev *
-get_nadk_dev(odp_pktio_t pktio)
+static inline struct dpaa2_dev *
+get_dpaa2_dev(odp_pktio_t pktio)
 {
 	pktio_entry_t *pktio_entry;
 
 	pktio_entry = get_pktio_entry(pktio);
-	return pktio_entry->s.pkt_nadk.dev;
+	return pktio_entry->s.pkt_dpaa2.dev;
 }
 
 /**
- * @brief Internal method to extract nadk_pool from odp_pool_t type
+ * @brief Internal method to extract dpaa2_pool from odp_pool_t type
  *
  * Only used internal to odpfsl_kni_api; Takes odp_pool_t and typecasts it to
  * pool_entry_t and return s.int_hdl field
  *
- * @param [in] odp_p odp_pool_t type pool, from which corresponding NADK
- *                   pool (nadk_pool) is expected
- * @return nadk_pool extracted NADK pool, or NULL
+ * @param [in] odp_p odp_pool_t type pool, from which corresponding DPAA2
+ *                   pool (dpaa2_pool) is expected
+ * @return dpaa2_pool extracted DPAA2 pool, or NULL
  */
-static inline struct nadk_pool *
-convert_odp_to_nadk_pool(odp_pool_t odp_p) {
+static inline struct dpaa2_pool *
+convert_odp_to_dpaa2_pool(odp_pool_t odp_p) {
 	pool_entry_t *pt;
 
 	pt = odp_pool_to_entry(odp_p);
@@ -359,7 +359,7 @@ kni_release_buffers(struct kni_mbuf **pkts, unsigned num)
 		return;
 
 	for (i = 0; i < num; i++) {
-		nadk_pktmbuf_free(pkts[i]);
+		dpaa2_pktmbuf_free(pkts[i]);
 		pkts[i] = NULL;
 	}
 }
@@ -383,15 +383,15 @@ static int32_t
 convert_odpbuf_to_knibuf(odp_packet_t odp_p, struct kni_mbuf **kbuf)
 {
 	struct kni_mbuf *m;
-	struct nadk_pool *p;
+	struct dpaa2_pool *p;
 
-	p = convert_odp_to_nadk_pool(kni_buf_pool);
+	p = convert_odp_to_dpaa2_pool(kni_buf_pool);
 	if (!p) {
 		ODP_ERR("Error:Unable to convert from ODP -> KNI buffers.\n");
 		return FAILURE;
 	}
 
-	m = nadk_pktmbuf_alloc(p);
+	m = dpaa2_pktmbuf_alloc(p);
 	if (!m) {
 		ODP_ERR("Error: Unable to allocate buffer from KNI Pool.\n");
 		return FAILURE;
@@ -438,13 +438,13 @@ convert_knibuf_to_odpbuf(struct kni_mbuf *kbuf, odp_pool_t pool_p, \
 #if 0
 	/* XXX Unhandled Scatter-Gather case */
 	 if (kbuf->pkt.next)
-		NADK_WARN(APP1, "mbuf is SG");
+		DPAA2_WARN(APP1, "mbuf is SG");
 #endif
 
 	p = odp_packet_alloc(pool_p, size);
 	if (ODP_PACKET_INVALID == p) {
 		ODP_ERR("Error: Unable to allocate memory for ODP Packet.\n");
-		nadk_pktmbuf_free(kbuf);
+		dpaa2_pktmbuf_free(kbuf);
 		return FAILURE;
 	}
 	odp_packet_reset(p, size);
@@ -456,7 +456,7 @@ convert_knibuf_to_odpbuf(struct kni_mbuf *kbuf, odp_pool_t pool_p, \
 	}
 	p->frame_len = size;
 
-	nadk_pktmbuf_free(kbuf);
+	dpaa2_pktmbuf_free(kbuf);
 	*odp_p = p;
 
 	return SUCCESS;
@@ -466,7 +466,7 @@ int
 odpfsl_kni_handle_events(odpfsl_knidev_t kdev, int32_t port_id) {
 	struct kni_device *kdev_p = (struct kni_device *)kdev;
 
-	return nadk_kni_handle_request(kdev_p->kni[port_id]);
+	return odpfsl_kni_handle_request(kdev_p->kni[port_id]);
 }
 
 unsigned
@@ -497,7 +497,7 @@ odpfsl_kni_tx(odpfsl_knidev_t kdev, int id, odp_packet_t odp_packets[], \
 	}
 
 	/* Burst tx to kni */
-	nb_tx = nadk_kni_tx_burst(kdev_p->kni[id], kni_buf, max_packets);
+	nb_tx = odpfsl_kni_tx_burst(kdev_p->kni[id], kni_buf, max_packets);
 	knidev_stats[kdev_p->port_id].rx_packets += nb_tx;
 	if (odp_unlikely(nb_tx < max_packets)) {
 		/* NOTE: This is an informational print, not an error. */
@@ -527,7 +527,7 @@ odpfsl_kni_rx(odpfsl_knidev_t kdev, int id, odp_pool_t odp_packet_pool, \
 		num = g_max_pkt_poll;
 
 	/* RX from KNI interface */
-	rx_packets = nadk_kni_rx_burst(kdev_p->kni[id], pkts, num);
+	rx_packets = odpfsl_kni_rx_burst(kdev_p->kni[id], pkts, num);
 
 	if (rx_packets == 0)
 		return rx_packets;
@@ -558,12 +558,12 @@ odpfsl_knidev_open(odpfsl_knidev_t kdev, uint8_t port_id, \
 	int ret = SUCCESS;
 	int i = 0;
 
-	struct nadk_kni *kni;
-	struct nadk_kni_conf conf;
+	struct odpfsl_kni *kni;
+	struct odpfsl_kni_conf conf;
 	odpfsl_knidev_ops_t in_ops;
 	odpfsl_knidev_ops_t *ops_p;
-	struct nadk_pool *p;
-	struct nadk_dev *ndev;
+	struct dpaa2_pool *p;
+	struct dpaa2_dev *ndev;
 	struct kni_device *kdev_p = (struct kni_device *)kdev;
 
 	if (port_id >= KNI_MAX_ETHPORTS) {
@@ -577,9 +577,9 @@ odpfsl_knidev_open(odpfsl_knidev_t kdev, uint8_t port_id, \
 	kdev_p->nb_kni = kdev_p->nb_lcore_k ? kdev_p->nb_lcore_k : 1;
 	kdev_p->pktio = pktio;
 	kdev_p->port_id = port_id;
-	ndev = get_nadk_dev(pktio);
+	ndev = get_dpaa2_dev(pktio);
 	if (!ndev) {
-		/* Unable to find nadk<=>pktio mapping; Can't continue */
+		/* Unable to find dpaa2<=>pktio mapping; Can't continue */
 		ODP_ERR("Error: Unable to find device for pktio.\n");
 		ret = FAILURE;
 		return ret;
@@ -599,14 +599,14 @@ odpfsl_knidev_open(odpfsl_knidev_t kdev, uint8_t port_id, \
 
 	memset(&conf, 0, sizeof(conf));
 
-	conf.id.device_id = nadk_dev_hwid(ndev);
+	conf.id.device_id = dpaa2_dev_hwid(ndev);
 	if (kdev_p->nb_lcore_k) {
-		snprintf(conf.name, NADK_KNI_NAMESIZE, "keth-%u_%u", \
+		snprintf(conf.name, DPAA2_KNI_NAMESIZE, "keth-%u_%u", \
 			conf.id.device_id, i);
 		conf.core_id = kdev_p->lcore_k[i];
 		conf.force_bind = 1;
 	} else {
-		snprintf(conf.name, NADK_KNI_NAMESIZE, "keth-%u", \
+		snprintf(conf.name, DPAA2_KNI_NAMESIZE, "keth-%u", \
 			conf.id.device_id);
 	}
 
@@ -620,12 +620,12 @@ odpfsl_knidev_open(odpfsl_knidev_t kdev, uint8_t port_id, \
 	 * is the master, for multiple kernel thread
 	 * environment.
 	 */
-	p = convert_odp_to_nadk_pool(kni_buf_pool);
+	p = convert_odp_to_dpaa2_pool(kni_buf_pool);
 	for (i = 0; i < kdev_p->nb_kni; i++) {
 		if (i == 0)
-			kni = nadk_kni_alloc(p, &conf, ops_p);
+			kni = odpfsl_kni_alloc(p, &conf, ops_p);
 		else
-			kni = nadk_kni_alloc(p, &conf, NULL);
+			kni = odpfsl_kni_alloc(p, &conf, NULL);
 
 		if (!kni) {
 			ODP_ERR("Error: Failed to create kni for port: %d\n", \
@@ -638,7 +638,7 @@ odpfsl_knidev_open(odpfsl_knidev_t kdev, uint8_t port_id, \
 	}
 
 	while (i > 0 && ret != SUCCESS) {
-		if (!nadk_kni_release(kdev_p->kni[--i])) {
+		if (!odpfsl_kni_release(kdev_p->kni[--i])) {
 			/* Unable to clean the allocated KNI devices */
 			ODP_ERR("Error: Unable to clean devices 0-%d.\n", i);
 			break;

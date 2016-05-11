@@ -60,8 +60,8 @@
  * The main modification of this implementation is the use of kbuf for
  * transports other than packets. kbufs can have other types.
  *
- * @addtogroup	NADK_KNI
- * @ingroup	NADK_NCS
+ * @addtogroup	DPAA2_KNI
+ * @ingroup	DPAA2_NCS
  * @{
 
  */
@@ -73,14 +73,14 @@ extern "C" {
 #endif
 
 /*! Headroom required in the KNI buffer */
-#define NADK_PKTMBUF_HEADROOM 32
+#define DPAA2_PKTMBUF_HEADROOM 32
 /*! Size of a cache line */
 #define ODP_CACHE_LINE_SIZE 64
 
 /**
  * A packet message buffer.
  */
-struct nadk_pktmbuf {
+struct dpaa2_pktmbuf {
 	/* valid for any segment */
 	struct kni_mbuf *next;  /*!< Next segment of scattered packet. */
 	void *data;             /*!< Start address of data in segment buffer. */
@@ -120,7 +120,7 @@ struct kni_mbuf {
 	uint16_t ol_flags;            /*!< Offload features. */
 	uint32_t ol_info;		/*!< TCP Segmentation Offload feature Information. */
 	union {
-		struct nadk_pktmbuf pkt; /*!< A packet message buffer. */
+		struct dpaa2_pktmbuf pkt; /*!< A packet message buffer. */
 	};
 } __attribute__((__aligned__(ODP_CACHE_LINE_SIZE)));
 
@@ -143,7 +143,7 @@ enum kni_mbuf_type {
  *  - NULL indicate error.
  */
 
-struct kni_mbuf *nadk_pktmbuf_alloc(void *mp);
+struct kni_mbuf *dpaa2_pktmbuf_alloc(void *mp);
 
 /*!
  * Free kbuf to kbuf pool
@@ -154,9 +154,9 @@ struct kni_mbuf *nadk_pktmbuf_alloc(void *mp);
  * @return
  *  void
  */
-void nadk_pktmbuf_free(void *_m);
+void dpaa2_pktmbuf_free(void *_m);
 
-void nadk_pktmbuf_init(void *mp, void *_m);
+void dpaa2_pktmbuf_init(void *mp, void *_m);
 
 /*! @} */
 #endif

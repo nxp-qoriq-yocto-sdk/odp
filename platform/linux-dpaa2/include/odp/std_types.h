@@ -72,10 +72,10 @@ typedef void *handle_t;
 typedef uint64_t phys_addr_t;
 
 /*! Represents a bad physical address */
-#define NADK_BAD_PHYS_ADDR ((phys_addr_t)-1)
+#define DPAA2_BAD_PHYS_ADDR ((phys_addr_t)-1)
 
-#define NADK_SUCCESS 0
-#define NADK_FAILURE -1
+#define DPAA2_SUCCESS 0
+#define DPAA2_FAILURE -1
 
 #ifndef TRUE
 #define TRUE 1

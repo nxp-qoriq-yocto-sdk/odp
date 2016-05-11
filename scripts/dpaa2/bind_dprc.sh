@@ -1,5 +1,5 @@
 #/*
-# * Copyright (C) 2015-2016 Freescale Semiconductor,Inc. All rights reserved.
+# * Copyright (c) 2014-16 Freescale Semiconductor, Inc. All rights reserved.
 # */
 
 DPRC=/sys/bus/fsl-mc/devices/$1
@@ -22,7 +22,7 @@ then
 	echo "#1)    Allow unsafe interrupts"
 	echo 1 > /sys/module/vfio_iommu_type1/parameters/allow_unsafe_interrupts
 else
-	echo " Can't Run NADK without VFIO support"
+	echo " Can't Run DPAA2 without VFIO support"
 	exit
 fi
 
@@ -40,5 +40,5 @@ if [ -e /dev/vfio ];
 then
 	ls /dev/vfio/
 else
-	echo " Can't Run NADK without VFIO support"
+	echo " Can't Run DPAA2 without VFIO support"
 fi

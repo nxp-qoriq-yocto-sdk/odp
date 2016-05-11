@@ -29,15 +29,15 @@ odp_shm_t odp_shm_reserve(const char *name, uint64_t size, uint64_t align,
 		ODP_ERR("Process Shared memory currently not supported");
 		return ODP_SHM_NULL;
 	}
-	return (odp_shm_t)nadk_memzone_reserve_aligned(name, size,
+	return (odp_shm_t)dpaa2_memzone_reserve_aligned(name, size,
 						SOCKET_ID_ANY, 0, align);
 }
 
 int odp_shm_info(odp_shm_t shm, odp_shm_info_t *info)
 {
-	struct nadk_memzone *mz = (struct nadk_memzone *)shm;
+	struct dpaa2_memzone *mz = (struct dpaa2_memzone *)shm;
 	info->name      = mz->name;
-	info->addr      = (void *)nadk_memzone_virt(mz);
+	info->addr      = (void *)dpaa2_memzone_virt(mz);
 	info->size      = mz->len;
 	info->page_size = mz->hugepage_sz;
 	info->flags     = 0;
@@ -46,5 +46,5 @@ int odp_shm_info(odp_shm_t shm, odp_shm_info_t *info)
 
 void odp_shm_print_all(void)
 {
-	nadk_memzone_dump(stdout);
+	dpaa2_memzone_dump(stdout);
 }

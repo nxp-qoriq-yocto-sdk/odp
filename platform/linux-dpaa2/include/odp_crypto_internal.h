@@ -16,7 +16,7 @@ extern "C" {
 #include <odp/crypto.h>
 #include <odp/helper/ip.h>
 #include <odp/helper/udp.h>
-#include <nadk_sec_priv.h>
+#include <dpaa2_sec_priv.h>
 
 #define SES_STATUS_FREE     0
 #define SES_STATUS_INUSE    1
@@ -24,28 +24,28 @@ extern "C" {
 /**
  * Maximum number of crypto sessions
  */
-#define ODP_CONFIG_CRYPTO_SES   64
+#define ODP_CONFIG_CRYPTO_SES   1024
 
-extern struct nadk_dev *sec_dev;
+extern struct dpaa2_dev *sec_dev;
 
 /*!
- * The type of operation supported by NADK SEC Library
+ * The type of operation supported by DPAA2 SEC Library
  */
-enum nadk_op_type {
-	NADK_SEC_NONE,	/*!< No Cipher operations*/
-	NADK_SEC_CIPHER,/*!< CIPHER operations */
-	NADK_SEC_AUTH,	/*!< Authentication Operations */
-	NADK_SEC_AEAD,	/*!< Authenticated Encryption with associated data */
-	NADK_SEC_IPSEC,	/*!< IPSEC protocol operations*/
-	NADK_SEC_PDCP,	/*!< PDCP protocol operations*/
-	NADK_SEC_PKC,	/*!< Public Key Cryptographic Operations */
-	NADK_SEC_MAX
+enum dpaa2_op_type {
+	DPAA2_SEC_NONE,	/*!< No Cipher operations*/
+	DPAA2_SEC_CIPHER,/*!< CIPHER operations */
+	DPAA2_SEC_AUTH,	/*!< Authentication Operations */
+	DPAA2_SEC_AEAD,	/*!< Authenticated Encryption with associated data */
+	DPAA2_SEC_IPSEC,	/*!< IPSEC protocol operations*/
+	DPAA2_SEC_PDCP,	/*!< PDCP protocol operations*/
+	DPAA2_SEC_PKC,	/*!< Public Key Cryptographic Operations */
+	DPAA2_SEC_MAX
 };
 
 /*!
  * Class 1 context to be supplied by application
  */
-struct nadk_cipher_ctxt {
+struct dpaa2_cipher_ctxt {
 	odp_crypto_iv_t  iv;	/**< Cipher Initialization Vector (IV) */
 	uint8_t *init_counter;	/*!< Set initial counter for CTR mode */
 };
@@ -53,7 +53,7 @@ struct nadk_cipher_ctxt {
 /*!
  *  Class 2 context to be supplied by application
  */
-struct nadk_auth_ctxt {
+struct dpaa2_auth_ctxt {
 	uint8_t trunc_len;              /*!< Length for output ICV, should
 					  * be 0 if no truncation required */
 };
@@ -61,7 +61,7 @@ struct nadk_auth_ctxt {
 /*!
  * AEAD Processing context for single pass non-protocol processing
  */
-struct nadk_aead_ctxt {
+struct dpaa2_aead_ctxt {
 	odp_bool_t auth_cipher_text;       /**< Authenticate/cipher ordering */
 	odp_crypto_iv_t  iv;	/**< Cipher Initialization Vector (IV) */
 	uint16_t auth_only_len; /*!< Length of data for Auth only */
@@ -70,9 +70,9 @@ struct nadk_aead_ctxt {
 };
 
 /*!
- * nadk header for NAT-T support in IPSec ESP
+ * dpaa2 header for NAT-T support in IPSec ESP
  */
-struct nadk_sec_natt_hdr {
+struct dpaa2_sec_natt_hdr {
 	odph_ipv4hdr_t tunnel_header;	/*!< Outer IP Header for
 			* tunnel mode*/
 	odph_udphdr_t udp_header;	/*!< UDP Header for NAT Traversal
@@ -83,25 +83,25 @@ struct nadk_sec_natt_hdr {
  * Additional IPSec header and options
  */
 union header {
-	struct nadk_sec_natt_hdr natt;	/*!< Outer NATT Header */
+	struct dpaa2_sec_natt_hdr natt;	/*!< Outer NATT Header */
 	odph_ipv4hdr_t ip4_hdr;	/*!< Outer IPv4 Header */
 };
 
-#define NADK_IPSEC_ESN 0x0001	/*!< Extended sequence number in IPSec */
-#define NADK_IV_RANDOM 0x0002	/*!< Random IV for Class 1 Operation */
-#define NADK_IPSEC_NATT 0x0004	/*!< NAT-Traversal required */
-#define NADK_IPSEC_ANTIREPLAY_NONE 0x0008	/*!< No Antireplay Support*/
-#define NADK_IPSEC_ANTIREPLAY_32 0x0010	/*!< Antireplay window of 32 bit */
-#define NADK_IPSEC_ANTIREPLAY_64 0x0018	/*!< Antireplay window of 64 bit */
-#define NADK_IPSEC_ANTIREPLAY_MASK 0x0018 /*!< Antireplay flag mask */
-#define NADK_IPSEC_IP_CHECKSUM	0x0020	/*!<IP Header checksum update */
-#define NADK_IPSEC_DTTL	0x0040	/*!<IP Header TTL Decrement */
+#define DPAA2_IPSEC_ESN 0x0001	/*!< Extended sequence number in IPSec */
+#define DPAA2_IV_RANDOM 0x0002	/*!< Random IV for Class 1 Operation */
+#define DPAA2_IPSEC_NATT 0x0004	/*!< NAT-Traversal required */
+#define DPAA2_IPSEC_ANTIREPLAY_NONE 0x0008	/*!< No Antireplay Support*/
+#define DPAA2_IPSEC_ANTIREPLAY_32 0x0010	/*!< Antireplay window of 32 bit */
+#define DPAA2_IPSEC_ANTIREPLAY_64 0x0018	/*!< Antireplay window of 64 bit */
+#define DPAA2_IPSEC_ANTIREPLAY_MASK 0x0018 /*!< Antireplay flag mask */
+#define DPAA2_IPSEC_IP_CHECKSUM	0x0020	/*!<IP Header checksum update */
+#define DPAA2_IPSEC_DTTL	0x0040	/*!<IP Header TTL Decrement */
 
 /*!
  * The structure is to be filled by user as a part of
- * nadk_sec_proto_ctxt
+ * dpaa2_sec_proto_ctxt
  */
-struct nadk_ipsec_ctxt {
+struct dpaa2_ipsec_ctxt {
 	enum odp_ipsec_mode ipsec_mode; /*!< Operation Mode Tunnel/Transport*/
 	uint16_t proto_flags;	/*!< Protocol specific bit-flags */
 	odp_crypto_iv_t  iv;	/**< Cipher Initialization Vector (IV) */
@@ -114,9 +114,9 @@ struct nadk_ipsec_ctxt {
 
 /*!
  * The structure is to be filled by user as a part of
- * nadk_sec_proto_ctxt for PDCP Control Plane Protocol
+ * dpaa2_sec_proto_ctxt for PDCP Control Plane Protocol
  */
-struct nadk_pdcp_ctxt {
+struct dpaa2_pdcp_ctxt {
 	enum odp_pdcp_mode pdcp_mode;	/*!< Data/Control mode*/
 	int8_t bearer;	/*!< PDCP bearer ID */
 	int8_t pkt_dir;/*!< PDCP Frame Direction 0:UL 1:DL*/
@@ -130,7 +130,7 @@ struct nadk_pdcp_ctxt {
 
 #define NULL_CRYPTO	1
 #define NULL_IPSEC	2
-struct nadk_null_sec_ctxt {
+struct dpaa2_null_sec_ctxt {
 	enum odp_ipsec_mode ipsec_mode; /*!< Operation Mode Tunnel/Transport*/
 	uint8_t null_ctxt_type; /*!< NULL CRYPTO or NULL IPSEC context */
 	uint32_t spi;           /*!< SPI value */
@@ -140,9 +140,9 @@ struct nadk_null_sec_ctxt {
 
 typedef struct crypto_ses_entry_u {
 	odp_queue_t compl_queue;
-	void *ctxt;	/*!< Additional opaque context maintained for NADK
+	void *ctxt;	/*!< Additional opaque context maintained for DPAA2
 			 * Driver. The relevant information to be filled by
-			 * NADK SEC driver are per flow FLC, associated SEC
+			 * DPAA2 SEC driver are per flow FLC, associated SEC
 			 * Object */
 	uint8_t ctxt_type;
 	enum odp_crypto_op dir;		/*!< Operation Direction */
@@ -152,12 +152,12 @@ typedef struct crypto_ses_entry_u {
 	odp_crypto_key_t auth_key;	/**< Authentication key */
 	uint8_t status;
 	union {
-		struct nadk_cipher_ctxt cipher_ctxt;
-		struct nadk_auth_ctxt auth_ctxt;
-		struct nadk_aead_ctxt aead_ctxt;
-		struct nadk_ipsec_ctxt ipsec_ctxt;
-		struct nadk_pdcp_ctxt pdcp_ctxt;
-		struct nadk_null_sec_ctxt null_sec_ctxt;
+		struct dpaa2_cipher_ctxt cipher_ctxt;
+		struct dpaa2_auth_ctxt auth_ctxt;
+		struct dpaa2_aead_ctxt aead_ctxt;
+		struct dpaa2_ipsec_ctxt ipsec_ctxt;
+		struct dpaa2_pdcp_ctxt pdcp_ctxt;
+		struct dpaa2_null_sec_ctxt null_sec_ctxt;
 	} ext_params;
 } crypto_ses_entry_t;
 

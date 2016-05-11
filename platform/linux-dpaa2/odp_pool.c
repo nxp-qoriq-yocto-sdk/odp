@@ -24,11 +24,11 @@
 #include <string.h>
 #include <stdlib.h>
 
-/* for NADK */
-#include <nadk_mbuf.h>
-#include <nadk_mbuf_priv.h>
-#include <odp_packet_nadk.h>
-extern int nadk_mbuf_pool_get_bpid(void *bplist);
+/* for DPAA2 */
+#include <dpaa2_mbuf.h>
+#include <dpaa2_mbuf_priv.h>
+#include <odp_packet_dpaa2.h>
+extern int dpaa2_mbuf_pool_get_bpid(void *bplist);
 
 #if ODP_CONFIG_POOLS > ODP_BUFFER_MAX_POOLS
 #error ODP_CONFIG_POOLS > ODP_BUFFER_MAX_POOLS
@@ -124,8 +124,8 @@ my_elem_init(void *mp ODP_UNUSED, void *arg,
 	void *obj, unsigned i ODP_UNUSED)
 {
 	uint8_t type = (uint8_t)((uint64_t)arg);
-	struct nadk_mbuf *mbuf = obj;
-	memset(obj, 0, sizeof (struct nadk_mbuf));
+	struct dpaa2_mbuf *mbuf = obj;
+	memset(obj, 0, sizeof (struct dpaa2_mbuf));
 	_odp_buffer_type_set(mbuf, type);
 }
 
@@ -228,9 +228,9 @@ odp_pool_t odp_pool_create(const char *name, odp_pool_param_t *params)
 
 	if (params->type == ODP_POOL_PACKET) {
 		void *h_bp_list;
-		struct nadk_bp_list_cfg bp_list_cfg;
+		struct dpaa2_bp_list_cfg bp_list_cfg;
 		/* Buffer Pool allocation. ODP APs provide only one buffer pool */
-		memset(&bp_list_cfg, 0, sizeof(struct nadk_bp_list_cfg));
+		memset(&bp_list_cfg, 0, sizeof(struct dpaa2_bp_list_cfg));
 		bp_list_cfg.num_buf_pools = 1;
 		bp_list_cfg.buf_pool[0].num = buf_num;
 		bp_list_cfg.buf_pool[0].size = blk_size;
@@ -239,7 +239,7 @@ odp_pool_t odp_pool_create(const char *name, odp_pool_param_t *params)
 			+ params->pkt.uarea_size, ODP_PACKET_LAYOUT_ALIGN);
 
 		bp_list_cfg.buf_pool[0].odp_user_area = params->pkt.uarea_size;
-		h_bp_list = nadk_mbuf_pool_list_init(&bp_list_cfg);
+		h_bp_list = dpaa2_mbuf_pool_list_init(&bp_list_cfg);
 		if (!h_bp_list) {
 			ODP_ERR("Buffer pool is not initialised\n");
 			POOL_UNLOCK(&pool->s.lock);
@@ -250,17 +250,17 @@ odp_pool_t odp_pool_create(const char *name, odp_pool_param_t *params)
 				buf_num, blk_size, params->pkt.uarea_size,
 				bp_list_cfg.buf_pool[0].meta_data_size);
 
-		pool->s.bpid = nadk_mbuf_pool_get_bpid(h_bp_list);
+		pool->s.bpid = dpaa2_mbuf_pool_get_bpid(h_bp_list);
 		pool->s.int_hdl = h_bp_list;
 	} else {
-		struct nadk_mpool_cfg mpcfg = {0};
+		struct dpaa2_mpool_cfg mpcfg = {0};
 		mpcfg.name = name;
-		mpcfg.block_size = sizeof(struct nadk_mbuf) + blk_size;
+		mpcfg.block_size = sizeof(struct dpaa2_mbuf) + blk_size;
 		mpcfg.num_global_blocks = buf_num;
 		mpcfg.num_max_blocks = buf_num;
 		mpcfg.alignment = buf_align;
-		mpcfg.priv_data_size = sizeof(struct nadk_mbuf);
-		pool->s.int_hdl = nadk_mpool_create(&mpcfg, my_elem_init,
+		mpcfg.priv_data_size = sizeof(struct dpaa2_mbuf);
+		pool->s.int_hdl = dpaa2_mpool_create(&mpcfg, my_elem_init,
 			(void *)(uint64_t)(params->type));
 		if (!pool->s.int_hdl) {
 			ODP_ERR("Buffer pool is not initialised\n");
@@ -333,9 +333,9 @@ int odp_pool_destroy(odp_pool_t pool_hdl)
 	POOL_LOCK(&pool->s.lock);
 
 	if (pool->s.params.type != ODP_EVENT_PACKET) {
-		nadk_mpool_delete((void *)pool->s.int_hdl);
+		dpaa2_mpool_delete((void *)pool->s.int_hdl);
 	} else {
-		nadk_mbuf_pool_list_deinit((void *)pool->s.int_hdl);
+		dpaa2_mbuf_pool_list_deinit((void *)pool->s.int_hdl);
 	}
 
 	pool->s.flags.all = 0;
@@ -368,7 +368,7 @@ void odp_buffer_free(odp_buffer_t buf)
 	pool_entry_t *pool = odp_buf_to_pool(buf_hdr);
 
 	if (pool->s.params.type == ODP_POOL_PACKET)
-		nadk_mbuf_free(buf_hdr);
+		dpaa2_mbuf_free(buf_hdr);
 	else
 		ret_blk(&pool->s, buf);
 	return;
@@ -378,10 +378,26 @@ void odp_pool_print(odp_pool_t pool_hdl)
 {
 	pool_entry_t *pool = odp_pool_to_entry(pool_hdl);
 
-	if (pool->s.params.type == ODP_EVENT_PACKET) {
-		ODP_DBG("NADK BMAN buffer pool bpid %d", pool->s.bpid);
-	}
-	//hemant - to be completed
+	ODP_PRINT("\n\n");
+	ODP_PRINT("POOL PRINT:\n");
+	ODP_PRINT("Pool id              = \t\t%d\n", pool->s.pool_id);
+	ODP_PRINT("Pool Name            = \t\t%s\n", pool->s.name);
+	ODP_PRINT("Pool type            = \t\t0x%X\n", pool->s.params.type);
+	ODP_PRINT("Pool bpid            = \t\t%d\n", pool->s.bpid);
+	ODP_PRINT("Pool flags           = \t\t0x%X\n", pool->s.flags.all);
+
+	if (pool->s.params.type == ODP_POOL_PACKET) {
+		ODP_PRINT("Number of packets                            = \t\t%d\n", pool->s.params.pkt.num);
+		ODP_PRINT("Minimum length for each packet               = \t\t%d\n", pool->s.params.pkt.len);
+		ODP_PRINT("Min pkt data bytes stored in 1st seg		= \t\t%d\n", pool->s.params.pkt.seg_len);
+		ODP_PRINT("user area size                               = \t\t%d\n", pool->s.params.pkt.uarea_size);
+	} else if (pool->s.params.type == ODP_POOL_BUFFER) {
+		ODP_PRINT("Number of buffers                    = \t\t%d\n", pool->s.params.buf.num);
+		ODP_PRINT("Max number of bytes for each buffer  = \t\t%d\n", pool->s.params.buf.size);
+		ODP_PRINT("Minimum buffer alignment in bytes    = \t\t%d\n", pool->s.params.buf.align);
+	} else {
+		ODP_PRINT("Number of timeouts                   = \t\t%d\n", pool->s.params.tmo.num);
+        }
 }
 
 odp_pool_t odp_buffer_pool(odp_buffer_t buf)

@@ -159,7 +159,7 @@ static inline int queue_is_sched(odp_queue_t handle)
  * Return: Failure(< 0) or Success(0).
 */
 int32_t fill_queue_configuration(queue_entry_t *queue,
-				struct nadk_vq_param *cfg);
+				struct dpaa2_vq_param *cfg);
 #ifdef __cplusplus
 }
 #endif

@@ -27,19 +27,19 @@ extern "C" {
  */
 static inline int odp_shm_free(odp_shm_t shm)
 {
-	return nadk_memzone_free(shm);
+	return dpaa2_memzone_free(shm);
 }
 
 
 static inline odp_shm_t odp_shm_lookup(const char *name)
 {
-	return nadk_memzone_lookup(name);
+	return dpaa2_memzone_lookup(name);
 }
 
 
 static inline void *odp_shm_addr(odp_shm_t shm)
 {
-	return (void *)nadk_memzone_virt(shm);
+	return (void *)dpaa2_memzone_virt(shm);
 }
 
 /**

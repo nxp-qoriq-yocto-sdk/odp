@@ -11,7 +11,7 @@
 #include <odp_pool_internal.h>
 #include <odp_buffer_internal.h>
 #include <odp_debug_internal.h>
-#include <nadk_mpool_priv.h>
+#include <dpaa2_mpool_priv.h>
 
 #include <string.h>
 #include <stdio.h>
@@ -38,9 +38,9 @@ uint32_t odp_buffer_size(odp_buffer_t buf)
 {
 	odp_buffer_hdr_t	*buf_hdr = odp_buf_to_hdr(buf);
 	pool_entry_t		*pool = odp_buf_to_pool(buf_hdr);
-	struct nadk_pool	*mpool;
+	struct dpaa2_pool	*mpool;
 
-	mpool = (struct nadk_pool *)pool->s.int_hdl;
+	mpool = (struct dpaa2_pool *)pool->s.int_hdl;
 	if (!mpool)
 		return 0;
 
@@ -89,15 +89,13 @@ int odp_buffer_snprint(char *str, uint32_t n, odp_buffer_t buf)
 	len += snprintf(&str[len], n-len,
 			"Buffer\n");
 	len += snprintf(&str[len], n-len,
-			"  pool         %"PRIu64"\n", (int64_t) hdr->bpid);
-#if 0
+			"  Buffer type		0x%X\n", _odp_buffer_type(buf));
 	len += snprintf(&str[len], n-len,
-			"  phy_addr     %"PRIu64"\n", hdr->phyaddr);
-#endif
+			"  pool pointer		%p\n", (struct pool_entry_s *)hdr->buf_pool);
 	len += snprintf(&str[len], n-len,
-			"  addr         %p\n",        hdr->data);
+			"  data addr		%p\n",        hdr->data);
 	len += snprintf(&str[len], n-len,
-			"  size         %u\n",        hdr->tot_frame_len);
+			"  size			%u\n",        odp_buffer_size(buf));
 
 	return len;
 }
@@ -105,7 +103,16 @@ int odp_buffer_snprint(char *str, uint32_t n, odp_buffer_t buf)
 
 void odp_buffer_print(odp_buffer_t buf)
 {
-	if (_odp_buffer_type(buf) == ODP_EVENT_PACKET)
-		nadk_mbuf_dump_pkt(stdout, buf);
-	//todo - add for non packets
+	if (_odp_buffer_type(buf) == ODP_EVENT_PACKET) {
+		dpaa2_mbuf_dump_pkt(stdout, buf);
+	} else {
+		int max_len = 512;
+		char str[max_len];
+		int len;
+
+		len = odp_buffer_snprint(str, max_len - 1, buf);
+		str[len] = 0;
+
+		ODP_PRINT("\n%s\n", str);
+	}
 }

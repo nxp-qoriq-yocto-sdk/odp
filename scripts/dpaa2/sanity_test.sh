@@ -47,12 +47,12 @@ read res
 if [ $res = y ] ; then
 	echo
 	echo
-	FILE=nadk_kni.ko
+	FILE=odpfsl_kni.ko
 	if [ -f $FILE ];
 	then
-		insmod nadk_kni.ko
+		insmod odpfsl_kni.ko
 	else
-		insmod ../../drv/nadk_kni.ko
+		insmod ../../drv/odpfsl_kni.ko
 	fi
 	echo
 	echo
@@ -234,20 +234,20 @@ if [ $res = y ] ; then
 	echo " ------ On HOST run following Name Space settings---------"
 	echo
 	echo " ------> Create following Tuntap I/Fs"
-	echo tuntap_if_configure.sh create nadk_l3fwd_1 02:00:c0:a8:3c:02 192.168.2.2
-	echo tuntap_if_configure.sh create nadk_l3fwd_2 02:00:c0:a8:a0:02 192.168.3.2
+	echo tuntap_if_configure.sh create dpaa2_l3fwd_1 02:00:c0:a8:3c:02 192.168.2.2
+	echo tuntap_if_configure.sh create dpaa2_l3fwd_2 02:00:c0:a8:a0:02 192.168.3.2
 	echo
 	echo
 	echo " ------> Attach Tuntap I/Fs"
-	echo start_tio_bridge.sh -m w0_m6 -n nadk_l3fwd_1
-	echo start_tio_bridge.sh -m w0_m7 -n nadk_l3fwd_2
+	echo start_tio_bridge.sh -m w0_m6 -n dpaa2_l3fwd_1
+	echo start_tio_bridge.sh -m w0_m7 -n dpaa2_l3fwd_2
 	echo
 	echo
 	echo " ------> Run Below CMDs"
 	echo
 	echo sudo ip netns add ns1
-	echo sudo ip link set nadk_l3fwd_2 netns ns1
-	echo sudo ip netns exec ns1 ifconfig nadk_l3fwd_2 192.168.3.2
+	echo sudo ip link set dpaa2_l3fwd_2 netns ns1
+	echo sudo ip netns exec ns1 ifconfig dpaa2_l3fwd_2 192.168.3.2
 	echo sudo ip netns exec ns1 route add -net 192.168.2.0/24 gw 192.168.3.1
 	echo sudo ip netns exec ns1 arp -s 192.168.3.1 00:00:00:00:00:07
 	echo
@@ -262,7 +262,7 @@ if [ $res = y ] ; then
 	echo "Run following commands on Host to restore interface & Namespace"
 	echo
 	echo
-	echo sudo ip netns exec ns1 ip link set nadk_l3fwd_2 netns 1
+	echo sudo ip netns exec ns1 ip link set dpaa2_l3fwd_2 netns 1
 	echo sudo ip netns delete ns1
 	echo
 	echo

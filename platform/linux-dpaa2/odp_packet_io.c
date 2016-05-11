@@ -15,7 +15,7 @@
 #include <odp_internal.h>
 #include <odp/spinlock.h>
 #include <odp/shared_memory.h>
-#include <odp_packet_nadk.h>
+#include <odp_packet_dpaa2.h>
 #include <odp/config.h>
 #include <odp_queue_internal.h>
 #include <odp_schedule_internal.h>
@@ -28,14 +28,14 @@
 #include <sys/ioctl.h>
 #include <ifaddrs.h>
 #include <errno.h>
-#include <nadk.h>
-#include <nadk_dev.h>
-#include <nadk_ethdev.h>
-#include <nadk_sec_priv.h>
-#include <nadk_ether.h>
+#include <dpaa2.h>
+#include <dpaa2_dev.h>
+#include <dpaa2_ethdev.h>
+#include <dpaa2_sec_priv.h>
+#include <dpaa2_ether.h>
 #include <pthread.h>
-#include <nadk_eth_priv.h>
-#include <nadk_dev_priv.h>
+#include <dpaa2_eth_priv.h>
+#include <dpaa2_dev_priv.h>
 
 #include <fsl_dpni.h>
 #include <fsl_dpni_cmd.h>
@@ -96,7 +96,7 @@ int odp_pktio_init_global(void)
 	}
 
 	/*Scan the device list for Ethernet devices*/
-	retcode = odp_nadk_scan_device_list(NADK_NIC);
+	retcode = odp_dpaa2_scan_device_list(DPAA2_NIC);
 	if (!retcode) {
 		ODP_ERR("Schedule init failed...\n");
 		return -1;
@@ -174,7 +174,7 @@ static void init_pktio_entry(pktio_entry_t *entry)
 {
 	set_taken(entry);
 	entry->s.inq_default = ODP_QUEUE_INVALID;
-	memset(&entry->s.pkt_nadk, 0, sizeof(entry->s.pkt_nadk));
+	memset(&entry->s.pkt_dpaa2, 0, sizeof(entry->s.pkt_dpaa2));
 	/* Save pktio parameters, type is the most useful */
 	//memcpy(&entry->s.params, params, sizeof(*params));
 	pktio_classifier_init(entry);
@@ -239,11 +239,11 @@ odp_pktio_t odp_pktio_open(const char *dev, odp_pool_t pool,
 	odp_pktio_t id;
 	pktio_entry_t *pktio_entry;
 	queue_entry_t *queue_entry;
-	struct nadk_dev *ndev;
+	struct dpaa2_dev *ndev;
 	int ret;
 	uint8_t src_mac[ODPH_ETHADDR_LEN];
 
-	ODP_DBG("Allocating nadk pktio\n");
+	ODP_DBG("Allocating dpaa2 pktio\n");
 
 	if (strlen(dev) >= IFNAMSIZ) {
 		/* ioctl names limitation */
@@ -252,9 +252,9 @@ odp_pktio_t odp_pktio_open(const char *dev, odp_pool_t pool,
 		return ODP_PKTIO_INVALID;
 	}
 
-	ndev = odp_get_nadk_eth_dev(dev);
+	ndev = odp_get_dpaa2_eth_dev(dev);
 	if (!ndev) {
-		ODP_ERR("unable to find nadk_dev");
+		ODP_ERR("unable to find dpaa2_dev");
 		return ODP_PKTIO_INVALID;
 	}
 
@@ -272,13 +272,13 @@ odp_pktio_t odp_pktio_open(const char *dev, odp_pool_t pool,
 	if (strcmp(dev, "loop") == 0)
 		ret = init_loop(pktio_entry, id);
 #endif
-	pktio_entry->s.pkt_nadk.dev = ndev;
+	pktio_entry->s.pkt_dpaa2.dev = ndev;
 	ndev->pktio = (uint64_t)id;
 	memcpy(&pktio_entry->s.param, param, sizeof(odp_pktio_param_t));
-	ret = setup_pkt_nadk(&pktio_entry->s.pkt_nadk, (void *)ndev, pool);
+	ret = setup_pkt_dpaa2(&pktio_entry->s.pkt_dpaa2, (void *)ndev, pool);
 	if (ret != 0) {
 		unlock_entry_classifier(pktio_entry);
-		cleanup_pkt_nadk(&pktio_entry->s.pkt_nadk);
+		cleanup_pkt_dpaa2(&pktio_entry->s.pkt_dpaa2);
 		free_pktio_entry(id);
 		__odp_errno = EEXIST;
 		id = ODP_PKTIO_INVALID;
@@ -300,7 +300,7 @@ odp_pktio_t odp_pktio_open(const char *dev, odp_pool_t pool,
 	/*Configure tx queue at underlying hardware queues*/
 	queue_entry = queue_to_qentry(pktio_entry->s.outq_default);
 	queue_entry->s.priv = ndev->tx_vq[0];
-	nadk_dev_set_vq_handle(ndev->tx_vq[0], (uint64_t)queue_entry->s.handle);
+	dpaa2_dev_set_vq_handle(ndev->tx_vq[0], (uint64_t)queue_entry->s.handle);
 
 	return id;
 }
@@ -314,8 +314,8 @@ int odp_pktio_start(odp_pktio_t pktio)
 		return -1;
 	lock_entry(entry);
 	if (entry) {
-		ret = start_pkt_nadk(&entry->s.pkt_nadk);
-		if (NADK_FAILURE == ret) {
+		ret = start_pkt_dpaa2(&entry->s.pkt_dpaa2);
+		if (DPAA2_FAILURE == ret) {
 			ODP_ERR("Unable to start pktio\n");
 			unlock_entry(entry);
 			return -1;
@@ -335,8 +335,8 @@ int odp_pktio_stop(odp_pktio_t pktio)
 		return -1;
 	lock_entry(entry);
 	if (entry) {
-		ret = close_pkt_nadk(&entry->s.pkt_nadk);
-		if (NADK_FAILURE == ret) {
+		ret = close_pkt_dpaa2(&entry->s.pkt_dpaa2);
+		if (DPAA2_FAILURE == ret) {
 			ODP_ERR("Unable to stop pktio\n");
 			unlock_entry(entry);
 			return -1;
@@ -357,20 +357,20 @@ int odp_pktio_close(odp_pktio_t id)
 
 	lock_entry(entry);
 	if (!is_free(entry)) {
-		res  = close_pkt_nadk(&entry->s.pkt_nadk);
+		res  = close_pkt_dpaa2(&entry->s.pkt_dpaa2);
 		/*todo case ODP_PKTIO_TYPE_LOOPBACK:
 			res = odp_queue_destroy(entry->s.loopq);
 			break;*/
 		res |= free_pktio_entry(id);
 	}
 
-	res = cleanup_pkt_nadk(&entry->s.pkt_nadk);
+	res = cleanup_pkt_dpaa2(&entry->s.pkt_dpaa2);
 	if (res)
 		ODP_ERR("pktio cleanup failed\n");
 
 	/*Free allocated memories*/
-	nadk_data_free((void *)(entry->s.priv));
-	nadk_data_free((void *)(entry->s.cls.tc_cfg.key_cfg_iova));
+	dpaa2_data_free((void *)(entry->s.priv));
+	dpaa2_data_free((void *)(entry->s.cls.tc_cfg.key_cfg_iova));
 	unlock_entry(entry);
 
 	if (res != 0)
@@ -408,20 +408,20 @@ odp_pktio_t odp_pktio_lookup(const char *dev)
 	return id;
 }
 
-extern int32_t nadk_eth_recv(struct nadk_dev *dev,
+extern int32_t dpaa2_eth_recv(struct dpaa2_dev *dev,
 			void *vq,
 			uint32_t num,
-			nadk_mbuf_pt mbuf[]);
+			dpaa2_mbuf_pt mbuf[]);
 
 /**
- * Receive packets using nadk
+ * Receive packets using dpaa2
  */
-static inline int recv_pkt_nadk(pkt_nadk_t * const pkt_nadk, odp_packet_t pkt_table[],
+static inline int recv_pkt_dpaa2(pkt_dpaa2_t * const pkt_dpaa2, odp_packet_t pkt_table[],
 		unsigned len)
 {
-	struct nadk_dev *dev = pkt_nadk->dev;
+	struct dpaa2_dev *dev = pkt_dpaa2->dev;
 	static int vq = 0;
-	return nadk_eth_recv(dev, dev->rx_vq[vq], len, pkt_table);
+	return dpaa2_eth_recv(dev, dev->rx_vq[vq], len, pkt_table);
 }
 
 int odp_pktio_recv(odp_pktio_t id, odp_packet_t pkt_table[], int len)
@@ -438,21 +438,21 @@ int odp_pktio_recv(odp_pktio_t id, odp_packet_t pkt_table[], int len)
 	if (pktio_entry == NULL)
 		return -1;
 
-	return recv_pkt_nadk(&pktio_entry->s.pkt_nadk, pkt_table, len);
+	return recv_pkt_dpaa2(&pktio_entry->s.pkt_dpaa2, pkt_table, len);
 
 }
 
 int odp_pktio_send(odp_pktio_t id, odp_packet_t pkt_table[], int len)
 {
 	pktio_entry_t *pktio_entry = get_pktio_entry(id);
-	struct nadk_dev *ndev;
+	struct dpaa2_dev *ndev;
 	int pkts;
 
 	if (pktio_entry == NULL)
 		return -1;
 
-	ndev = pktio_entry->s.pkt_nadk.dev;
-	pkts = nadk_eth_xmit(ndev, ndev->tx_vq[0], len, pkt_table);
+	ndev = pktio_entry->s.pkt_dpaa2.dev;
+	pkts = dpaa2_eth_xmit(ndev, ndev->tx_vq[0], len, pkt_table);
 
 	return pkts;
 }
@@ -461,7 +461,7 @@ int odp_pktio_inq_setdef(odp_pktio_t id, odp_queue_t queue)
 {
 	pktio_entry_t *pktio_entry = get_pktio_entry(id);
 	queue_entry_t *qentry;
-	struct nadk_dev *ndev;
+	struct dpaa2_dev *ndev;
 
 	if (pktio_entry == NULL || queue == ODP_QUEUE_INVALID)
 		return -1;
@@ -479,13 +479,13 @@ int odp_pktio_inq_setdef(odp_pktio_t id, odp_queue_t queue)
 		queue_unlock(qentry);
 		return -1;
 	}
-	ndev = pktio_entry->s.pkt_nadk.dev;
+	ndev = pktio_entry->s.pkt_dpaa2.dev;
 	pktio_entry->s.inq_default = queue;
 	qentry->s.pktin = id;
 	qentry->s.pktout = id;
 	qentry->s.status = QUEUE_STATUS_READY;
 	qentry->s.priv = ndev->rx_vq[0];
-	nadk_dev_set_vq_handle(ndev->rx_vq[0], (uint64_t)qentry->s.handle);
+	dpaa2_dev_set_vq_handle(ndev->rx_vq[0], (uint64_t)qentry->s.handle);
 	unlock_entry(pktio_entry);
 
 	if (qentry->s.queue_param_set) {
@@ -513,10 +513,10 @@ int odp_pktio_inq_remdef(odp_pktio_t id)
 	queue_lock(qentry);
 
 	if (qentry->s.queue_param_set && enable_hash) {
-		struct nadk_dev *ndev;
+		struct dpaa2_dev *ndev;
 
-		ndev = pktio_entry->s.pkt_nadk.dev;
-		nadk_eth_remove_flow_distribution(ndev, 0);
+		ndev = pktio_entry->s.pkt_dpaa2.dev;
+		dpaa2_eth_remove_flow_distribution(ndev, 0);
 	}
 
 	if (qentry->s.status == QUEUE_STATUS_FREE) {
@@ -563,13 +563,13 @@ int pktout_enqueue(queue_entry_t *qentry, odp_buffer_hdr_t *buf_hdr)
 	int len = 1;
 	int nbr;
 	pktio_entry_t *pktio_entry;
-	struct nadk_dev *ndev;
+	struct dpaa2_dev *ndev;
 
 	pktio_entry = get_pktio_entry(qentry->s.pktout);
 	if (pktio_entry == NULL)
 		return -1;
-	ndev = pktio_entry->s.pkt_nadk.dev;
-	nbr = nadk_eth_xmit(ndev, qentry->s.priv, len, &pkt);
+	ndev = pktio_entry->s.pkt_dpaa2.dev;
+	nbr = dpaa2_eth_xmit(ndev, qentry->s.priv, len, &pkt);
 
 	return (nbr == len ? 0 : -1);
 }
@@ -609,14 +609,14 @@ int pktin_enqueue(queue_entry_t *qentry,
 	int len = 1;
 	int nbr;
 
-	nbr = nadk_eth_xmit_fqid(qentry->s.priv, len, &pkt);
+	nbr = dpaa2_eth_xmit_fqid(qentry->s.priv, len, &pkt);
 
 	return (nbr == len ? 0 : -1);
 }
 
 odp_buffer_hdr_t *pktin_dequeue(queue_entry_t *qentry)
 {
-	nadk_mbuf_pt pkt_buf[1];
+	dpaa2_mbuf_pt pkt_buf[1];
 	int pkts;
 
 	pkts = odp_pktio_recv(qentry->s.pktin, pkt_buf, 1);
@@ -628,7 +628,7 @@ odp_buffer_hdr_t *pktin_dequeue(queue_entry_t *qentry)
 
 odp_buffer_hdr_t *sec_dequeue(queue_entry_t *qentry)
 {
-	nadk_mbuf_pt pkt_buf[1];
+	dpaa2_mbuf_pt pkt_buf[1];
 	int pkts;
 	crypto_vq_t *crypto_vq = qentry->s.priv;
 
@@ -638,7 +638,7 @@ odp_buffer_hdr_t *sec_dequeue(queue_entry_t *qentry)
 			fprintf(stderr, "error: odp_term_local() failed.\n");
 		pthread_exit(NULL);
 	}
-	pkts = nadk_sec_recv(crypto_vq->rx_vq, 1, pkt_buf);
+	pkts = dpaa2_sec_recv(crypto_vq->rx_vq, 1, pkt_buf);
 	if (pkts <= 0)
 		return NULL;
 
@@ -656,7 +656,7 @@ int sec_dequeue_multi(queue_entry_t *qentry, odp_buffer_hdr_t *pkt_buf[], int nu
 			fprintf(stderr, "error: odp_term_local() failed.\n");
 		pthread_exit(NULL);
 	}
-	pkts = nadk_sec_recv(crypto_vq->rx_vq, num, pkt_buf);
+	pkts = dpaa2_sec_recv(crypto_vq->rx_vq, num, pkt_buf);
 
 	return pkts;
 }
@@ -672,7 +672,7 @@ int pktin_enq_multi(queue_entry_t *qentry,
 	for (i = 0; i < num; ++i)
 		pkt_tbl[i] = _odp_packet_from_buffer((odp_buffer_t)buf_hdr[i]);
 
-	nbr = nadk_eth_xmit_fqid(qentry->s.priv,
+	nbr = dpaa2_eth_xmit_fqid(qentry->s.priv,
 				num, pkt_tbl);
 	return nbr;
 }
@@ -709,7 +709,7 @@ int odpfsl_pktio_mtu_set(odp_pktio_t id, unsigned mtu)
 		return -1;
 	}
 	unlock_entry(entry);
-	return nadk_eth_mtu_set(entry->s.pkt_nadk.dev, mtu);
+	return dpaa2_eth_mtu_set(entry->s.pkt_dpaa2.dev, mtu);
 }
 
 int odp_pktio_mtu(odp_pktio_t id)
@@ -730,7 +730,7 @@ int odp_pktio_mtu(odp_pktio_t id)
 		return -1;
 	}
 	unlock_entry(entry);
-	return nadk_eth_mtu_get(entry->s.pkt_nadk.dev);
+	return dpaa2_eth_mtu_get(entry->s.pkt_dpaa2.dev);
 }
 
 int odp_pktio_promisc_mode_set(odp_pktio_t id, odp_bool_t enable)
@@ -751,9 +751,9 @@ int odp_pktio_promisc_mode_set(odp_pktio_t id, odp_bool_t enable)
 		return -1;
 	}
 	if (enable)
-		nadk_eth_promiscuous_enable(entry->s.pkt_nadk.dev);
+		dpaa2_eth_promiscuous_enable(entry->s.pkt_dpaa2.dev);
 	else
-		nadk_eth_promiscuous_disable(entry->s.pkt_nadk.dev);
+		dpaa2_eth_promiscuous_disable(entry->s.pkt_dpaa2.dev);
 	unlock_entry(entry);
 	return 0;
 }
@@ -776,13 +776,13 @@ int odp_pktio_promisc_mode(odp_pktio_t id)
 	}
 
 	unlock_entry(entry);
-	return nadk_eth_promiscuous_get(entry->s.pkt_nadk.dev);
+	return dpaa2_eth_promiscuous_get(entry->s.pkt_dpaa2.dev);
 }
 
 int odpfsl_pktio_mac_addr_set(odp_pktio_t id, void *mac_addr, int addr_size)
 {
 	pktio_entry_t *entry;
-	struct nadk_dev *ndev;
+	struct dpaa2_dev *ndev;
 
 	if (addr_size < ETH_ADDR_LEN)
 		return 0;
@@ -801,11 +801,11 @@ int odpfsl_pktio_mac_addr_set(odp_pktio_t id, void *mac_addr, int addr_size)
 		return -1;
 	}
 
-	ndev = entry->s.pkt_nadk.dev;
+	ndev = entry->s.pkt_dpaa2.dev;
 	unlock_entry(entry);
 
-	if (nadk_eth_set_mac_addr(ndev, (uint8_t *)mac_addr)
-		== NADK_SUCCESS)
+	if (dpaa2_eth_set_mac_addr(ndev, (uint8_t *)mac_addr)
+		== DPAA2_SUCCESS)
 		return ETH_ADDR_LEN;
 	return 0;
 }
@@ -814,7 +814,7 @@ int odpfsl_pktio_mac_addr_set(odp_pktio_t id, void *mac_addr, int addr_size)
 int odp_pktio_mac_addr(odp_pktio_t id, void *mac_addr, int addr_size)
 {
 	pktio_entry_t *entry;
-	struct nadk_dev *ndev;
+	struct dpaa2_dev *ndev;
 	if (addr_size < ETH_ADDR_LEN)
 		return -1;
 
@@ -832,11 +832,11 @@ int odp_pktio_mac_addr(odp_pktio_t id, void *mac_addr, int addr_size)
 		return -1;
 	}
 
-	ndev = entry->s.pkt_nadk.dev;
+	ndev = entry->s.pkt_dpaa2.dev;
 	unlock_entry(entry);
 
-	if (nadk_eth_get_mac_addr(ndev, (uint8_t *)mac_addr)
-		== NADK_SUCCESS)
+	if (dpaa2_eth_get_mac_addr(ndev, (uint8_t *)mac_addr)
+		== DPAA2_SUCCESS)
 		return ETH_ADDR_LEN;
 	return -1;
 }
@@ -845,9 +845,9 @@ int odp_pktio_stats(odp_pktio_t pktio,
 		    odp_pktio_stats_t *stats)
 {
 	pktio_entry_t *entry;
-	struct nadk_dev *ndev;
+	struct dpaa2_dev *ndev;
 	struct fsl_mc_io *dpni;
-	struct nadk_dev_priv *dev_priv;
+	struct dpaa2_dev_priv *dev_priv;
 	int32_t  retcode = -1;
 	uint64_t value;
 
@@ -865,7 +865,7 @@ int odp_pktio_stats(odp_pktio_t pktio,
 		return -1;
 	}
 
-	ndev = entry->s.pkt_nadk.dev;
+	ndev = entry->s.pkt_dpaa2.dev;
 	unlock_entry(entry);
 
 	/*First check for the invalid parameters passed*/
@@ -939,9 +939,9 @@ error:
 int odp_pktio_stats_reset(odp_pktio_t pktio)
 {
 	pktio_entry_t *entry;
-	struct nadk_dev *ndev;
+	struct dpaa2_dev *ndev;
 	struct fsl_mc_io *dpni;
-	struct nadk_dev_priv *dev_priv;
+	struct dpaa2_dev_priv *dev_priv;
 	int32_t  retcode;
 
 	entry = get_pktio_entry(pktio);
@@ -958,7 +958,7 @@ int odp_pktio_stats_reset(odp_pktio_t pktio)
 		return -1;
 	}
 
-	ndev = entry->s.pkt_nadk.dev;
+	ndev = entry->s.pkt_dpaa2.dev;
 	unlock_entry(entry);
 
 	/*First check for the invalid parameters passed*/

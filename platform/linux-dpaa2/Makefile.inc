@@ -4,15 +4,15 @@
 #
 # SPDX-License-Identifier:     BSD-3-Clause
 
-# NADK_CFLAGS should match flags used to build NADK libraries
+# DPAA2_CFLAGS should match flags used to build DPAA2 libraries
 
-#overwrite some top level compiler options - required by NADK
-NADK_CFLAGS = -Wno-cast-qual -Wno-pointer-arith
-NADK_CFLAGS += -D_GNU_SOURCE
-#NADK_CFLAGS += -DODP_USE_PHYS_IOVA
-#NADK_CFLAGS += -DODP_ON_VM
+#overwrite some top level compiler options - required by DPAA2
+DPAA2_CFLAGS = -Wno-cast-qual -Wno-pointer-arith
+DPAA2_CFLAGS += -D_GNU_SOURCE
+#DPAA2_CFLAGS += -DODP_USE_PHYS_IOVA
+#DPAA2_CFLAGS += -DODP_ON_VM
 
-PLAT_CFLAGS = $(NADK_CFLAGS)
+PLAT_CFLAGS = $(DPAA2_CFLAGS)
 PLAT_CFLAGS += -I$(top_srcdir)/platform/linux-dpaa2/flib/linux/
 PLAT_CFLAGS += -I$(top_srcdir)/platform/linux-dpaa2/flib/qbman/include/drivers/
 PLAT_CFLAGS += -I$(top_srcdir)/platform/linux-dpaa2/flib/qbman/include

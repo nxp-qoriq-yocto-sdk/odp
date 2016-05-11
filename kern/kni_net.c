@@ -35,7 +35,7 @@
 #include <linux/skbuff.h>
 #include <linux/kthread.h>
 #include <linux/delay.h>
-#include "../platform/linux-dpaa2/kni/nadk_kni_common.h"
+#include "../platform/linux-dpaa2/kni/odpfsl_kni_common.h"
 #include "kni_fifo.h"
 #include "kni_dev.h"
 #define WD_TIMEOUT 5 /*jiffies */
@@ -56,7 +56,7 @@ static void kni_net_rx_normal(struct kni_dev *kni);
 static void kni_net_rx_lo_fifo(struct kni_dev *kni);
 static void kni_net_rx_lo_fifo_skb(struct kni_dev *kni);
 static int kni_net_process_request(struct kni_dev *kni,
-			struct nadk_kni_request *req);
+			struct odpfsl_kni_request *req);
 
 /* kni rx function pointer, with default to normal rx */
 static kni_net_rx_t kni_net_rx_func = kni_net_rx_normal;
@@ -68,7 +68,7 @@ static int
 kni_net_open(struct net_device *dev)
 {
 	int ret;
-	struct nadk_kni_request req;
+	struct odpfsl_kni_request req;
 	struct kni_dev *kni = netdev_priv(dev);
 
 	if (kni->lad_dev)
@@ -84,7 +84,7 @@ kni_net_open(struct net_device *dev)
 	netif_start_queue(dev);
 
 	memset(&req, 0, sizeof(req));
-	req.req_id = NADK_KNI_REQ_CFG_NETWORK_IF;
+	req.req_id = DPAA2_KNI_REQ_CFG_NETWORK_IF;
 
 	/* Setting if_up to non-zero means up */
 	req.if_up = 1;
@@ -97,13 +97,13 @@ static int
 kni_net_release(struct net_device *dev)
 {
 	int ret;
-	struct nadk_kni_request req;
+	struct odpfsl_kni_request req;
 	struct kni_dev *kni = netdev_priv(dev);
 
 	netif_stop_queue(dev); /* can't transmit any more */
 
 	memset(&req, 0, sizeof(req));
-	req.req_id = NADK_KNI_REQ_CFG_NETWORK_IF;
+	req.req_id = DPAA2_KNI_REQ_CFG_NETWORK_IF;
 
 	/* Setting if_up to 0 means down */
 	req.if_up = 0;
@@ -132,13 +132,13 @@ static int
 kni_net_change_mtu(struct net_device *dev, int new_mtu)
 {
 	int ret;
-	struct nadk_kni_request req;
+	struct odpfsl_kni_request req;
 	struct kni_dev *kni = netdev_priv(dev);
 
 	KNI_PRINT("kni_net_change_mtu new mtu %d to be set\n", new_mtu);
 
 	memset(&req, 0, sizeof(req));
-	req.req_id = NADK_KNI_REQ_CHANGE_MTU;
+	req.req_id = DPAA2_KNI_REQ_CHANGE_MTU;
 	req.new_mtu = new_mtu;
 	ret = kni_net_process_request(kni, &req);
 	if (ret == 0 && req.result == 0)
@@ -158,13 +158,13 @@ kni_net_change_mtu(struct net_device *dev, int new_mtu)
 static int kni_net_set_mac(struct net_device *netdev, void *p)
 {
 	int ret;
-	struct nadk_kni_request req;
+	struct odpfsl_kni_request req;
 	struct sockaddr *addr;
 	struct kni_dev *kni;
 	KNI_DBG("kni_net_config \n");
 	kni = netdev_priv(netdev);
 	memset(&req, 0, sizeof(req));
-	req.req_id = NADK_KNI_REQ_CHANGE_MAC_ADDR;
+	req.req_id = DPAA2_KNI_REQ_CHANGE_MAC_ADDR;
 	addr = p;
 	if (!is_valid_ether_addr((unsigned char *)(addr->sa_data))) {
 		return -EADDRNOTAVAIL;
@@ -177,10 +177,10 @@ static int kni_net_set_mac(struct net_device *netdev, void *p)
 
 static void  kni_net_set_promiscusity(struct net_device *netdev, int flags)
 {
-	struct nadk_kni_request req;
+	struct odpfsl_kni_request req;
 	struct kni_dev *kni = netdev_priv(netdev);
 	memset(&req, 0, sizeof(req));
-	req.req_id = NADK_KNI_REQ_CHANGE_PROMISC;
+	req.req_id = DPAA2_KNI_REQ_CHANGE_PROMISC;
 	if (netdev->flags & IFF_PROMISC)
 		req.promiscusity = PROMISC_ENABLE;
 	else
@@ -197,8 +197,8 @@ kni_net_rx_normal(struct kni_dev *kni)
 	unsigned ret;
 	uint32_t len;
 	unsigned i, num, num_rx, num_fq;
-	struct nadk_kni_mbuf *kva;
-	struct nadk_kni_mbuf *va[MBUF_BURST_SZ];
+	struct odpfsl_kni_mbuf *kva;
+	struct odpfsl_kni_mbuf *va[MBUF_BURST_SZ];
 	void * data_kva;
 
 	struct sk_buff *skb;
@@ -270,12 +270,12 @@ kni_net_rx_lo_fifo(struct kni_dev *kni)
 	unsigned ret;
 	uint32_t len;
 	unsigned i, num, num_rq, num_tq, num_aq, num_fq;
-	struct nadk_kni_mbuf *kva;
-	struct nadk_kni_mbuf *va[MBUF_BURST_SZ];
+	struct odpfsl_kni_mbuf *kva;
+	struct odpfsl_kni_mbuf *va[MBUF_BURST_SZ];
 	void * data_kva;
 
-	struct nadk_kni_mbuf *alloc_kva;
-	struct nadk_kni_mbuf *alloc_va[MBUF_BURST_SZ];
+	struct odpfsl_kni_mbuf *alloc_kva;
+	struct odpfsl_kni_mbuf *alloc_va[MBUF_BURST_SZ];
 	void *alloc_data_kva;
 
 	/* Get the number of entries in rx_q */
@@ -360,8 +360,8 @@ kni_net_rx_lo_fifo_skb(struct kni_dev *kni)
 	unsigned ret;
 	uint32_t len;
 	unsigned i, num_rq, num_fq, num;
-	struct nadk_kni_mbuf *kva;
-	struct nadk_kni_mbuf *va[MBUF_BURST_SZ];
+	struct odpfsl_kni_mbuf *kva;
+	struct odpfsl_kni_mbuf *va[MBUF_BURST_SZ];
 	void * data_kva;
 
 	struct sk_buff *skb;
@@ -447,7 +447,7 @@ kni_net_rx(struct kni_dev *kni)
 /*
  * Transmit a packet (called by the kernel)
  */
-#ifdef NADK_KNI_VHOST
+#ifdef DPAA2_KNI_VHOST
 static int
 kni_net_tx(struct sk_buff *skb, struct net_device *dev)
 {
@@ -465,8 +465,8 @@ kni_net_tx(struct sk_buff *skb, struct net_device *dev)
 	uint16_t len = 0;
 	unsigned ret;
 	struct kni_dev *kni = netdev_priv(dev);
-	struct nadk_kni_mbuf *pkt_kva = NULL;
-	struct nadk_kni_mbuf *pkt_va = NULL;
+	struct odpfsl_kni_mbuf *pkt_kva = NULL;
+	struct odpfsl_kni_mbuf *pkt_va = NULL;
 
 
 	dev->trans_start = jiffies; /* save the timestamp */
@@ -578,7 +578,7 @@ kni_net_poll_resp(struct kni_dev *kni)
  * It can be called to process the request.
  */
 static int
-kni_net_process_request(struct kni_dev *kni, struct nadk_kni_request *req)
+kni_net_process_request(struct kni_dev *kni, struct odpfsl_kni_request *req)
 {
 	int ret = -1;
 	void *resp_va;
@@ -593,7 +593,7 @@ kni_net_process_request(struct kni_dev *kni, struct nadk_kni_request *req)
 	mutex_lock(&kni->sync_lock);
 
 	/* Construct data */
-	memcpy(kni->sync_kva, req, sizeof(struct nadk_kni_request));
+	memcpy(kni->sync_kva, req, sizeof(struct odpfsl_kni_request));
 	num = kni_fifo_put(kni->req_q, &kni->sync_va, 1);
 	if (num < 1) {
 		KNI_ERR("Cannot send to req_q\n");
@@ -615,7 +615,7 @@ kni_net_process_request(struct kni_dev *kni, struct nadk_kni_request *req)
 		goto fail;
 	}
 
-	memcpy(req, kni->sync_kva, sizeof(struct nadk_kni_request));
+	memcpy(req, kni->sync_kva, sizeof(struct odpfsl_kni_request));
 	ret = 0;
 
 fail:

@@ -18,11 +18,11 @@ extern "C" {
 #endif
 
 #include <odp/std_types.h>
-#include <nadk/rts/nadk_mbuf.h>
+#include <odp/plat/sdk/rts/dpaa2_mbuf.h>
 #include <odp/plat/strong_types.h>
 
 /** ODP buffer */
-typedef nadk_mbuf_pt odp_buffer_t;
+typedef dpaa2_mbuf_pt odp_buffer_t;
 
 /** Invalid buffer */
 #define ODP_BUFFER_INVALID _odp_cast_scalar(odp_buffer_t, 0xffffffff)

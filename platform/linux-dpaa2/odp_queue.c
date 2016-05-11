@@ -25,7 +25,7 @@
 #include <odp/hints.h>
 #include <odp/sync.h>
 
-#include <nadk_hwq.h>
+#include <dpaa2_hwq.h>
 
 #ifdef USE_TICKETLOCK
 #include <odp/ticketlock.h>
@@ -253,28 +253,28 @@ odp_queue_t odp_queue_create(const char *name, odp_queue_type_t type,
 
 	/* create a SW queue for SCHED/POLL queues */
 	if ((type == ODP_QUEUE_TYPE_SCHED) || (type == ODP_QUEUE_TYPE_POLL)) {
-		/* Get a NADK Frame Queue */
-		void *sw_queue = nadk_get_frameq();
+		/* Get a DPAA2 Frame Queue */
+		void *sw_queue = dpaa2_get_frameq();
 
 		if (!sw_queue) {
-			ODP_ERR("Unable to allocate NADK queue\n");
+			ODP_ERR("Unable to allocate DPAA2 queue\n");
 			queue->s.status = QUEUE_STATUS_FREE;
 			return ODP_QUEUE_INVALID;
 		}
 
 		if (type == ODP_QUEUE_TYPE_SCHED) {
-			struct nadk_vq_param vq_param;
+			struct dpaa2_vq_param vq_param;
 			int ret;
 
 			/* Attach the queue to CONC */
-			memset(&vq_param, 0, sizeof(struct nadk_vq_param));
+			memset(&vq_param, 0, sizeof(struct dpaa2_vq_param));
 			vq_param.conc_dev = odp_get_conc_from_grp(param->sched.group);
 			vq_param.prio = ODP_SCHED_PRIO_DEFAULT;
-			ret = nadk_attach_frameq_to_conc(sw_queue, &vq_param);
-			if (NADK_FAILURE == ret) {
+			ret = dpaa2_attach_frameq_to_conc(sw_queue, &vq_param);
+			if (DPAA2_FAILURE == ret) {
 				ODP_ERR("Fail to setup RX VQ with CONC\n");
 				queue->s.status = QUEUE_STATUS_FREE;
-				nadk_put_frameq(sw_queue);
+				dpaa2_put_frameq(sw_queue);
 				return ODP_QUEUE_INVALID;
 			}
 			ret = odp_add_queue_to_group(param->sched.group);
@@ -282,7 +282,7 @@ odp_queue_t odp_queue_create(const char *name, odp_queue_type_t type,
 				odp_affine_group(param->sched.group, NULL);
 		}
 		/* Store the handle for future reference */
-		nadk_dev_set_vq_handle(sw_queue, (uint64_t)handle);
+		dpaa2_dev_set_vq_handle(sw_queue, (uint64_t)handle);
 
 		/*Store the sw_queue in queue_entry priv*/
 		queue->s.priv = sw_queue;
@@ -413,13 +413,13 @@ int queue_enq(queue_entry_t *queue, odp_buffer_hdr_t *buf_hdr)
 {
 	int num_xmit;
 
-	num_xmit = nadk_hwq_xmit(queue->s.priv, &buf_hdr, 1);
+	num_xmit = dpaa2_hwq_xmit(queue->s.priv, &buf_hdr, 1);
 	return (num_xmit == 1 ? 0 : -1);
 }
 
 int queue_enq_multi(queue_entry_t *queue, odp_buffer_hdr_t *buf_hdr[], int num)
 {
-	return nadk_hwq_xmit(queue->s.priv, buf_hdr, num);
+	return dpaa2_hwq_xmit(queue->s.priv, buf_hdr, num);
 }
 
 int queue_enq_dummy(queue_entry_t *queue ODP_UNUSED,
@@ -469,13 +469,13 @@ odp_buffer_hdr_t *queue_deq(queue_entry_t *queue)
 {
 	odp_buffer_hdr_t *buf_hdr[1] = {NULL};
 
-	nadk_hwq_recv(queue->s.priv, buf_hdr, 1);
+	dpaa2_hwq_recv(queue->s.priv, buf_hdr, 1);
 	return buf_hdr[0];
 }
 
 int queue_deq_multi(queue_entry_t *queue, odp_buffer_hdr_t *buf_hdr[], int num)
 {
-	return nadk_hwq_recv(queue->s.priv, buf_hdr, num);
+	return dpaa2_hwq_recv(queue->s.priv, buf_hdr, num);
 }
 
 int queue_deq_multi_destroy(queue_entry_t *queue,
@@ -543,9 +543,9 @@ void queue_unlock(queue_entry_t *queue)
 }
 
 int32_t fill_queue_configuration(queue_entry_t *queue,
-					struct nadk_vq_param *cfg)
+					struct dpaa2_vq_param *cfg)
 {
-	memset(cfg, 0, sizeof(struct nadk_vq_param));
+	memset(cfg, 0, sizeof(struct dpaa2_vq_param));
 
 	switch (queue->s.type) {
 	case ODP_QUEUE_TYPE_SCHED:

@@ -34,8 +34,8 @@ extern "C" {
 #include <odp_buffer_internal.h>
 
 #include <string.h>
-/* for NADK */
-#include <nadk/rts/nadk_mpool.h>
+/* for DPAA2 */
+#include <odp/plat/sdk/rts/dpaa2_mpool.h>
 
 /**
  * Buffer initialization routine prototype
@@ -106,12 +106,12 @@ extern void *pool_entry_ptr[];
 
 static inline void *get_blk(struct pool_entry_s *pool)
 {
-	return nadk_mpool_getblock((void *)pool->int_hdl, NULL);
+	return dpaa2_mpool_getblock((void *)pool->int_hdl, NULL);
 }
 
 static inline void ret_blk(struct pool_entry_s *pool, void *block)
 {
-	nadk_mpool_relblock((void *)pool->int_hdl, block);
+	dpaa2_mpool_relblock((void *)pool->int_hdl, block);
 }
 
 static inline odp_buffer_hdr_t *get_buf(struct pool_entry_s *pool)
@@ -131,7 +131,7 @@ static inline void ret_buf(struct pool_entry_s *pool, odp_buffer_hdr_t *buf)
 }
 
 
-static inline uint32_t nadk_handle_to_index(void *int_hdl)
+static inline uint32_t dpaa2_handle_to_index(void *int_hdl)
 {
 	int i = ODP_BUFFER_MAX_POOLS;
 	for (i = 0; i <= ODP_BUFFER_MAX_POOLS; i++)

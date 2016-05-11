@@ -31,13 +31,14 @@
 #include <odp_config_internal.h>
 
 #include <odp_queue_internal.h>
-#include <nadk_time.h>
-#include <nadk_conc_priv.h>
-#include <nadk_mbuf_priv.h>
-#include <nadk_io_portal_priv.h>
-#include <nadk_vq.h>
-#include <nadk_ethdev.h>
-#include <nadk_memconfig.h>
+#include <dpaa2_time.h>
+#include <dpaa2_eth_priv.h>
+#include <dpaa2_conc_priv.h>
+#include <dpaa2_mbuf_priv.h>
+#include <dpaa2_io_portal_priv.h>
+#include <dpaa2_vq.h>
+#include <dpaa2_ethdev.h>
+#include <dpaa2_memconfig.h>
 #include <fsl_qbman_portal.h>
 #include <fsl_dpcon.h>
 #include <fsl_dpio.h>
@@ -93,13 +94,13 @@ struct thread_groups thr_grp[_ODP_INTERNAL_MAX_THREADS] = {{0} };
 /* Enable this Flag to get debug prints in loopback functionoality */
 #define	LOOPBACK_DEBUG	0
 
-static inline int32_t odp_schedule_dummy(nadk_mbuf_pt mbuf[], int num);
+static inline int32_t odp_schedule_dummy(dpaa2_mbuf_pt mbuf[], int num);
 /* Receive function to have PUSH/PULL at run time */
 __thread odp_sch_recv_t fn_sch_recv_pkt = odp_schedule_dummy;
 
-static inline int32_t odp_set_push_mode(odp_schedule_group_t group, struct nadk_dpio_dev *dpio);
+static inline int32_t odp_set_push_mode(odp_schedule_group_t group, struct dpaa2_dpio_dev *dpio);
 
-static inline int32_t odp_unset_push_mode(odp_schedule_group_t group, struct nadk_dpio_dev *dpio);
+static inline int32_t odp_unset_push_mode(odp_schedule_group_t group, struct dpaa2_dpio_dev *dpio);
 
 /* Mask of queues per priority */
 typedef uint8_t pri_mask_t;
@@ -116,7 +117,7 @@ typedef struct {
 	odp_spinlock_t grp_lock;
 	struct {
 		char		name[ODP_SCHED_GROUP_NAME_LEN]; /**< name of the group **/
-		struct nadk_dev *conc_dev; /**< conc device for group **/
+		struct dpaa2_dev *conc_dev; /**< conc device for group **/
 		int queues;	/**< queues count **/
 		int ch_index;	/**< channel index for corresponding conc device **/
 		odp_thrmask_t	*mask; /**< thread mask **/
@@ -156,7 +157,7 @@ int odp_schedule_init_global(void)
 {
 	int32_t retcode, i = 0;
 	odp_shm_t shm;
-	struct nadk_dev *cdev;
+	struct dpaa2_dev *cdev;
 
 	ODP_DBG("Schedule init ... ");
 
@@ -172,7 +173,7 @@ int odp_schedule_init_global(void)
 
 	memset(sched, 0, sizeof(sched_t));
 	/*Scan the device list for concentrator device*/
-	retcode = odp_nadk_scan_device_list(NADK_CONC);
+	retcode = odp_dpaa2_scan_device_list(DPAA2_CONC);
 	if (!retcode) {
 		ODP_ERR("Schedule init failed...\n");
 		odp_shm_free(shm);
@@ -185,14 +186,14 @@ int odp_schedule_init_global(void)
 			ODP_ERR("Resources unavailable\n");
 			return -1;
 		}
-		retcode = nadk_dev_start(cdev);
-		if (NADK_FAILURE == retcode) {
+		retcode = dpaa2_conc_start(cdev);
+		if (DPAA2_FAILURE == retcode) {
 			odp_shm_free(shm);
-			ODP_ERR("Failed Conc - nadk_dev_start\n");
+			ODP_ERR("Failed Conc - dpaa2_dev_start\n");
 			return retcode;
 		}
 		sched->sched_grp[i].conc_dev = cdev;
-		sched->sched_grp[i].ch_index = NADK_INVALID_CHANNEL_IDX;
+		sched->sched_grp[i].ch_index = DPAA2_INVALID_CHANNEL_IDX;
 		sched->sched_grp[i].queues = 0;
 		sched->sched_grp[i].mask = thread_sched_grp_mask(i);
 	}
@@ -203,7 +204,7 @@ int odp_schedule_init_global(void)
 	for (i = _ODP_SCHED_GROUP_NAMED; i < MAX_SCHED_GRPS; i++) {
 		memset(sched->sched_grp[i].name, 0, ODP_SCHED_GROUP_NAME_LEN);
 		sched->sched_grp[i].conc_dev = NULL;
-		sched->sched_grp[i].ch_index = NADK_INVALID_CHANNEL_IDX;
+		sched->sched_grp[i].ch_index = DPAA2_INVALID_CHANNEL_IDX;
 		sched->sched_grp[i].queues = 0;
 		sched->sched_grp[i].mask = thread_sched_grp_mask(i);
 	}
@@ -230,18 +231,18 @@ int odp_schedule_term_global(void)
 		memset(sched->sched_grp[i].name, 0, ODP_SCHED_GROUP_NAME_LEN);
 		sched->sched_grp[i].conc_dev = NULL;
 		sched->sched_grp[i].queues = 0;
-		sched->sched_grp[i].ch_index = NADK_INVALID_CHANNEL_IDX;
+		sched->sched_grp[i].ch_index = DPAA2_INVALID_CHANNEL_IDX;
 	}
 
 	for (i = 0; i < _ODP_SCHED_GROUP_NAMED; i++) {
-		retcode = nadk_dev_stop(sched->sched_grp[i].conc_dev);
-		if (NADK_FAILURE == retcode) {
-			ODP_ERR("Failed Conc - nadk_dev_start\n");
+		retcode = dpaa2_conc_stop(sched->sched_grp[i].conc_dev);
+		if (DPAA2_FAILURE == retcode) {
+			ODP_ERR("Failed Conc - dpaa2_conc_stop\n");
 			return retcode;
 		}
 		memset(sched->sched_grp[i].name, 0, ODP_SCHED_GROUP_NAME_LEN);
 		sched->sched_grp[i].conc_dev = NULL;
-		sched->sched_grp[i].ch_index = NADK_INVALID_CHANNEL_IDX;
+		sched->sched_grp[i].ch_index = DPAA2_INVALID_CHANNEL_IDX;
 		sched->sched_grp[i].queues = 0;
 	}
 
@@ -283,10 +284,11 @@ odp_buffer_t odp_schedule_buffer_alloc(odp_queue_t queue)
 void odp_schedule_queue(odp_queue_t queue, int prio)
 {
 	queue_entry_t *qentry;
-	struct nadk_dev *ndev;
-	struct nadk_vq_param vq_cfg;
+	struct dpaa2_dev *ndev;
+	struct dpaa2_vq_param vq_cfg;
 	pktio_entry_t *pktio_entry;
-	int i, max_rx_vq = 0;
+	uint32_t i, max_rx_vq = 0;
+	struct queues_config *q_config;
 	int32_t ret;
 
 	qentry = queue_to_qentry(queue);
@@ -294,44 +296,47 @@ void odp_schedule_queue(odp_queue_t queue, int prio)
 	if (pktio_entry == NULL || queue == ODP_QUEUE_INVALID)
 		return;
 
-	ndev = pktio_entry->s.pkt_nadk.dev;
+	ndev = pktio_entry->s.pkt_dpaa2.dev;
 	if (enable_hash) {
 		/* Adding support for multiple VQs & Rx Side distribution.
 		   Since, there is no ODP API available to enable Rx
 		   distribution, we are enabling all available VQs for a
 		   given User queue.
 		*/
-		max_rx_vq = nadk_dev_get_max_rx_vq(ndev);
+		max_rx_vq = dpaa2_dev_get_max_rx_vq(ndev);
 		ODP_PRINT("%s: MAX RX VQs are %d  for %s (%s)\n", __func__,
 			max_rx_vq, ndev->dev_string, pktio_entry->s.name);
 		/* Enable distribution */
-		ret = nadk_eth_setup_flow_distribution(ndev,
-				NADK_FDIST_IP_SA | NADK_FDIST_IP_DA,
-				0,
-				max_rx_vq);
-		if (ret) {
-			ODP_ERR("Fail to configure RX dist\n");
-			return;
+		q_config = dpaa2_eth_get_queues_config(ndev);
+		for (i = 0; i < q_config->num_tcs; i++) {
+			ret = dpaa2_eth_setup_flow_distribution(ndev,
+					DPAA2_FDIST_IP_SA | DPAA2_FDIST_IP_DA,
+					i,
+					q_config->tc_config[i].num_dist);
+			if (ret) {
+				ODP_ERR("Fail to configure RX dist\n");
+				return;
+			}
 		}
-		ODP_PRINT("Configured RX dist! 0x%X\n", NADK_FDIST_IP_SA | NADK_FDIST_IP_DA);
+		ODP_PRINT("Configured RX dist! 0x%X\n", DPAA2_FDIST_IP_SA | DPAA2_FDIST_IP_DA);
 	}
 
 	/*Prepare VQ parameters for configuring */
-	memset(&vq_cfg, 0, sizeof(struct nadk_vq_param));
-	/*Get a conc device from the NADK then map this queue to conc device*/
+	memset(&vq_cfg, 0, sizeof(struct dpaa2_vq_param));
+	/*Get a conc device from the DPAA2 then map this queue to conc device*/
 	vq_cfg.conc_dev = odp_get_conc_from_grp(qentry->s.param.sched.group);
 
 	vq_cfg.prio = prio;
 	vq_cfg.sync = qentry->s.param.sched.sync;
 	if (enable_hash) {
-		/*Configure NADK for RX Queue*/
+		/*Configure DPAA2 for RX Queue*/
 		for (i = 0; i < max_rx_vq; i++) {
-			nadk_dev_setup_rx_vq(ndev, i, &vq_cfg);
+			dpaa2_eth_setup_rx_vq(ndev, i, &vq_cfg);
 			/* All Low level VQs must be mapped to single User
 				Qeueue */
-			nadk_dev_set_vq_handle(ndev->rx_vq[i],
+			dpaa2_dev_set_vq_handle(ndev->rx_vq[i],
 					(uint64_t)qentry->s.handle);
-			if (NADK_FAILURE == ret) {
+			if (DPAA2_FAILURE == ret) {
 				ODP_ERR("Fail to setup RX VQ with CONC\n");
 				return;
 			}
@@ -340,9 +345,9 @@ void odp_schedule_queue(odp_queue_t queue, int prio)
 		}
 	} else {
 		i = 0;
-		nadk_dev_setup_rx_vq(ndev, i, &vq_cfg);
+		dpaa2_eth_setup_rx_vq(ndev, i, &vq_cfg);
 		/* All Low level VQs must be mapped to single User Qeueue */
-		nadk_dev_set_vq_handle(ndev->rx_vq[i],
+		dpaa2_dev_set_vq_handle(ndev->rx_vq[i],
 					(uint64_t)qentry->s.handle);
 		ODP_DBG("setup VQ %d with handle 0x%X\n", i, qentry->s.handle);
 	}
@@ -380,7 +385,7 @@ int32_t odp_sub_queue_to_group(odp_schedule_group_t grp)
 	return count;
 }
 
-struct nadk_dev *odp_get_conc_from_grp(odp_schedule_group_t grp)
+struct dpaa2_dev *odp_get_conc_from_grp(odp_schedule_group_t grp)
 {
 	return sched->sched_grp[grp].conc_dev;
 }
@@ -403,12 +408,12 @@ void odp_schedule_release_atomic(void)
 /*
  * Function to receive Scheduled packet from I/O Portal with PUSH Mode
  */
-static inline int32_t odp_rcv_push_mode(nadk_mbuf_pt mbuf[], int num ODP_UNUSED)
+static inline int32_t odp_rcv_push_mode(dpaa2_mbuf_pt mbuf[], int num ODP_UNUSED)
 {
 	struct qbman_swp *swp = thread_io_info.dpio_dev->sw_portal;
 	const struct qbman_fd *fd;
 	const struct qbman_result *dqrr_entry;
-	struct nadk_vq *rvq;
+	struct dpaa2_vq *rvq;
 	uint8_t status;
 
 	/* Function is responsible to receive frame for a given
@@ -432,7 +437,7 @@ static inline int32_t odp_rcv_push_mode(nadk_mbuf_pt mbuf[], int num ODP_UNUSED)
 		return 0;
 
 	/* Check for valid frame. If not sent a consume
-	 * confirmation to QBMAN receive_sch_pktotherwise give it to NADK
+	 * confirmation to QBMAN receive_sch_pktotherwise give it to DPAA2
 	 * application and then send consume confirmation to
 	 * QBMAN.
 	 */
@@ -444,7 +449,7 @@ static inline int32_t odp_rcv_push_mode(nadk_mbuf_pt mbuf[], int num ODP_UNUSED)
 	}
 
 	fd = qbman_result_DQ_fd(dqrr_entry);
-	rvq = (struct nadk_vq *)qbman_result_DQ_fqd_ctx(dqrr_entry);
+	rvq = (struct dpaa2_vq *)qbman_result_DQ_fqd_ctx(dqrr_entry);
 	if (rvq) {
 		mbuf[0] = rvq->qmfq.cb(swp, fd, dqrr_entry);
 		/* Set the current context in both threadinfo & buffer */
@@ -457,22 +462,22 @@ static inline int32_t odp_rcv_push_mode(nadk_mbuf_pt mbuf[], int num ODP_UNUSED)
 		return 0;
 	}
 	/*Check for the errors received*/
-	/*Return the total number of packets received to NADK app*/
+	/*Return the total number of packets received to DPAA2 app*/
 	return 1;
 }
 
 
 /* Function to benchmark low level performance */
-static inline int32_t odp_qbman_loopback(nadk_mbuf_pt mbuf[] ODP_UNUSED, int num ODP_UNUSED)
+static inline int32_t odp_qbman_loopback(dpaa2_mbuf_pt mbuf[] ODP_UNUSED, int num ODP_UNUSED)
 {
 	struct qbman_swp *swp = thread_io_info.dpio_dev->sw_portal;
 	const struct qbman_fd *fd;
 	const struct qbman_result *dqrr_entry;
-	struct nadk_vq *rvq;
+	struct dpaa2_vq *rvq;
 	uint8_t status;
-	struct nadk_vq *eth_tx_vq = NULL;
+	struct dpaa2_vq *eth_tx_vq = NULL;
 	struct qbman_eq_desc eqdesc;
-	struct nadk_dev_priv *dev_priv;
+	struct dpaa2_dev_priv *dev_priv;
 	uint32_t *overlay;
 	int ret;
 
@@ -481,7 +486,7 @@ static inline int32_t odp_qbman_loopback(nadk_mbuf_pt mbuf[] ODP_UNUSED, int num
 	*/
 	printf("%s: \n", __func__);
 	qbman_eq_desc_clear(&eqdesc);
-	qbman_eq_desc_set_no_orp(&eqdesc, NADK_EQ_RESP_ERR_FQ);
+	qbman_eq_desc_set_no_orp(&eqdesc, DPAA2_EQ_RESP_ERR_FQ);
 
 	/*Receive the packets*/
 	while (1) {
@@ -501,23 +506,22 @@ static inline int32_t odp_qbman_loopback(nadk_mbuf_pt mbuf[] ODP_UNUSED, int num
 			continue;
 		}
 
-		rvq = (struct nadk_vq *)qbman_result_DQ_fqd_ctx(dqrr_entry);
+		rvq = (struct dpaa2_vq *)qbman_result_DQ_fqd_ctx(dqrr_entry);
 		eth_tx_vq = rvq->dev->tx_vq[0];
-		dev_priv = (struct nadk_dev_priv *)rvq->dev->priv;
+		dev_priv = (struct dpaa2_dev_priv *)rvq->dev->priv;
 
 		qbman_eq_desc_set_qd(&eqdesc, dev_priv->qdid,
 				eth_tx_vq->flow_id, eth_tx_vq->tc_index);
 		/* SET DCA */
-#define QBMAN_IDX_FROM_DQRR(p) (((unsigned long)p & 0xff) >> 6)
+#define QBMAN_IDX_FROM_DQRR(p) (((unsigned long)p & 0x1ff) >> 6)
 		qbman_eq_desc_set_dca(&eqdesc, 1,
 				QBMAN_IDX_FROM_DQRR(dqrr_entry), 0);
 		fd = qbman_result_DQ_fd(dqrr_entry);
 
 		/* Swap Mac address */
-		overlay = (uint32_t *)((uint8_t *)(
-				NADK_IOVA_TO_VADDR(
-					NADK_GET_FD_ADDR(fd) +
-					NADK_GET_FD_OFFSET(fd))));
+		overlay = (uint32_t *)DPAA2_IOVA_TO_VADDR(
+				(uint8_t *)DPAA2_GET_FD_ADDR(fd) +
+					DPAA2_GET_FD_OFFSET(fd));
 #if LOOPBACK_DEBUG
 		printf("ETH:  0x%X%X%X\n", overlay[0], overlay[1], overlay[2]);
 #endif
@@ -529,7 +533,7 @@ static inline int32_t odp_qbman_loopback(nadk_mbuf_pt mbuf[] ODP_UNUSED, int num
 			int i = 0;
 
 			ODP_DBG("%s: FLC 0x%lu 0x%x\n", __func__,
-				NADK_GET_FD_FLC(fd), fd->simple.ctrl);
+				DPAA2_GET_FD_FLC(fd), fd->simple.ctrl);
 			while (i < 8) {
 				ODP_DBG(" %08X", fd->words[i]);
 				i++;
@@ -544,9 +548,9 @@ static inline int32_t odp_qbman_loopback(nadk_mbuf_pt mbuf[] ODP_UNUSED, int num
 	} /* End of While() */
 }
 
-static inline int32_t odp_rcv_pull_mode(nadk_mbuf_pt mbuf[], int num)
+static inline int32_t odp_rcv_pull_mode(dpaa2_mbuf_pt mbuf[], int num)
 {
-	struct nadk_dev *ndev;
+	struct dpaa2_dev *ndev;
 	int thr_id, count, ret = 0;
 	int *i;
 
@@ -556,7 +560,7 @@ static inline int32_t odp_rcv_pull_mode(nadk_mbuf_pt mbuf[], int num)
 	*i %= count;
 	do {
 		ndev = sched->sched_grp[thr_grp[thr_id].groups[*i]].conc_dev;
-		ret = nadk_conc_recv(ndev, NULL, num, mbuf);
+		ret = dpaa2_conc_recv(ndev, NULL, num, mbuf);
 		if (ret > 0)
 			return ret;
 		*i += 1;
@@ -568,7 +572,7 @@ static inline int32_t odp_rcv_pull_mode(nadk_mbuf_pt mbuf[], int num)
  * mapping for PUSH/PULL Mode & then reset the "fn_sch_recv_pkt" function
  * pointer to related Function
  */
-static inline int32_t odp_schedule_dummy(nadk_mbuf_pt mbuf[], int num)
+static inline int32_t odp_schedule_dummy(dpaa2_mbuf_pt mbuf[], int num)
 {
 	int thr_id, ret, i;
 	odp_thread_type_t type = odp_thread_type();
@@ -621,11 +625,11 @@ odp_event_t odp_schedule(odp_queue_t *out_queue, uint64_t wait)
 {
 	int32_t ret;
 	odp_event_t ev = ODP_EVENT_INVALID;
-	nadk_mbuf_pt pkt_buf[1];
+	dpaa2_mbuf_pt pkt_buf[1];
 	uint64_t wait_till;
 	/* Timeout Handling*/
 	if (wait)
-		wait_till = nadk_time_get_cycles() + wait;
+		wait_till = dpaa2_time_get_cycles() + wait;
 
 	do {
 		ret = fn_sch_recv_pkt(pkt_buf, 1);
@@ -633,11 +637,11 @@ odp_event_t odp_schedule(odp_queue_t *out_queue, uint64_t wait)
 			ev = (odp_event_t)pkt_buf[0];
 			if (out_queue) {
 				*out_queue =
-					(odp_queue_t)nadk_dev_get_vq_handle(pkt_buf[0]->vq);
+					(odp_queue_t)dpaa2_dev_get_vq_handle(pkt_buf[0]->vq);
 			}
 			break;
 		} else if (ret == 0) {
-			if ((wait != ODP_SCHED_WAIT) && (wait_till <= nadk_time_get_cycles()))
+			if ((wait != ODP_SCHED_WAIT) && (wait_till <= dpaa2_time_get_cycles()))
 				break;
 		}
 
@@ -667,11 +671,11 @@ int odp_schedule_multi(odp_queue_t *out_queue, uint64_t wait,
 		       odp_event_t events[], int num)
 {
 	int32_t i, num_pkt = 0;
-	nadk_mbuf_pt pkt_buf[MAX_DEQ];
+	dpaa2_mbuf_pt pkt_buf[MAX_DEQ];
 	uint64_t wait_till;
 	/* Timeout Handling*/
 	if (wait)
-		wait_till = nadk_time_get_cycles() + wait;
+		wait_till = dpaa2_time_get_cycles() + wait;
 
 	while (1) {
 		num_pkt = fn_sch_recv_pkt(pkt_buf, num);
@@ -680,7 +684,7 @@ int odp_schedule_multi(odp_queue_t *out_queue, uint64_t wait,
 		if (num_pkt > 0) {
 			if (out_queue) {
 				*out_queue = (odp_queue_t)
-					nadk_dev_get_vq_handle(pkt_buf[0]->vq);
+					dpaa2_dev_get_vq_handle(pkt_buf[0]->vq);
 			}
 
 			for (i = 0; i < num_pkt; i++)
@@ -689,7 +693,7 @@ int odp_schedule_multi(odp_queue_t *out_queue, uint64_t wait,
 			return num_pkt;
 
 		} else if (num_pkt == 0) {
-			if ((wait != ODP_SCHED_WAIT) && (wait_till <= nadk_time_get_cycles()))
+			if ((wait != ODP_SCHED_WAIT) && (wait_till <= dpaa2_time_get_cycles()))
 				break;
 		}
 
@@ -734,6 +738,9 @@ int odp_schedule_init_local(void)
 			thr_grp[thr_id].groups[thr_grp[thr_id].count] = ODP_SCHED_GROUP_CONTROL;
 			thr_grp[thr_id].count += 1;
 		}
+		/* PULL Mode configuration */
+		/* Set the RCV function pointer */
+		fn_sch_recv_pkt = odp_rcv_pull_mode;
 	}
 	if (dq_schedule_mode & ODPFSL_PUSH) {
 		for (i = _ODP_SCHED_GROUP_NAMED; i < MAX_SCHED_GRPS; i++) {
@@ -787,8 +794,8 @@ int odp_schedule_term_local(void)
 	}
 
 	if (!(dq_schedule_mode & ODPFSL_PUSH)) {
-		for (i = 0; i < nadk_res.res_cnt.conc_dev_cnt; i++)
-			nadk_dev_deaffine_conc_list(nadk_res.conc_dev[i]);
+		for (i = 0; i < dpaa2_res.res_cnt.conc_dev_cnt; i++)
+			dpaa2_dev_deaffine_conc_list(dpaa2_res.conc_dev[i]);
 	}
 	thr_grp[thr_id].dpio_dev = NULL;
 
@@ -799,8 +806,8 @@ void odp_schedule_pause(void)
 {
 	uint32_t i;
 	/*De-affine the concentrator for global scheduling of this thread*/
-	for (i = 0; i < nadk_res.res_cnt.conc_dev_cnt; i++)
-		nadk_dev_deaffine_conc_list(nadk_res.conc_dev[i]);
+	for (i = 0; i < dpaa2_res.res_cnt.conc_dev_cnt; i++)
+		dpaa2_dev_deaffine_conc_list(dpaa2_res.conc_dev[i]);
 }
 
 
@@ -808,8 +815,8 @@ void odp_schedule_resume(void)
 {
 	uint32_t i;
 	/*Affine the concentrator for global scheduling of this thread*/
-	for (i = 0; i < nadk_res.res_cnt.conc_dev_cnt; i++)
-		nadk_dev_affine_conc_list(nadk_res.conc_dev[i]);
+	for (i = 0; i < dpaa2_res.res_cnt.conc_dev_cnt; i++)
+		dpaa2_dev_affine_conc_list(dpaa2_res.conc_dev[i]);
 }
 
 
@@ -864,7 +871,7 @@ int32_t odp_affine_group(odp_schedule_group_t group, const odp_thrmask_t *msk)
 int32_t odp_deaffine_group(odp_schedule_group_t group, const odp_thrmask_t *msk)
 {
 	int i, already_present = 0, thr, ret;
-	struct nadk_dpio_dev *dpio_dev;
+	struct dpaa2_dpio_dev *dpio_dev;
 	const odp_thrmask_t *mask;
 
 	if (msk)
@@ -882,7 +889,7 @@ int32_t odp_deaffine_group(odp_schedule_group_t group, const odp_thrmask_t *msk)
 		}
 		if (already_present) {
 			if (dq_schedule_mode & ODPFSL_PUSH) {
-				dpio_dev = (struct nadk_dpio_dev *) thr_grp[thr].dpio_dev;
+				dpio_dev = (struct dpaa2_dpio_dev *) thr_grp[thr].dpio_dev;
 				if (dpio_dev) {
 					ret = odp_unset_push_mode(group, dpio_dev);
 					if (ret)
@@ -902,16 +909,16 @@ int32_t odp_deaffine_group(odp_schedule_group_t group, const odp_thrmask_t *msk)
 	return 0;
 }
 
-static inline int32_t odp_set_push_mode(odp_schedule_group_t group, struct nadk_dpio_dev *dpio)
+static inline int32_t odp_set_push_mode(odp_schedule_group_t group, struct dpaa2_dpio_dev *dpio)
 {
-	struct nadk_dev *conc_dev = sched->sched_grp[group].conc_dev;
+	struct dpaa2_dev *conc_dev = sched->sched_grp[group].conc_dev;
 
 	if (dq_schedule_mode & ODPFSL_PUSH) {
 		/* PUSH Mode configuration */
 		int32_t retcode;
 		uint8_t ch_index;
 		struct conc_attr attr;
-		struct nadk_dpio_dev *dpio_dev;
+		struct dpaa2_dpio_dev *dpio_dev;
 		struct qbman_swp *swp;
 
 		if (dpio)
@@ -921,7 +928,7 @@ static inline int32_t odp_set_push_mode(odp_schedule_group_t group, struct nadk_
 
 		swp = dpio_dev->sw_portal;
 		/*Get conc attributes so that channel ID can be mapped*/
-		nadk_conc_get_attributes(conc_dev, &attr);
+		dpaa2_conc_get_attributes(conc_dev, &attr);
 		/*Get mapping index corresponding to DPCON object*/
 		retcode = dpio_add_static_dequeue_channel(dpio_dev->dpio,
 				CMD_PRI_LOW, dpio_dev->token, attr.obj_id,
@@ -943,14 +950,14 @@ static inline int32_t odp_set_push_mode(odp_schedule_group_t group, struct nadk_
 	return 0;
 }
 
-static inline int32_t odp_unset_push_mode(odp_schedule_group_t group, struct nadk_dpio_dev *dpio)
+static inline int32_t odp_unset_push_mode(odp_schedule_group_t group, struct dpaa2_dpio_dev *dpio)
 {
-	struct nadk_dev *conc_dev = sched->sched_grp[group].conc_dev;
+	struct dpaa2_dev *conc_dev = sched->sched_grp[group].conc_dev;
 
 	if (dq_schedule_mode & ODPFSL_PUSH) {
 		int32_t retcode, i = 0;
 		struct conc_attr attr;
-		struct nadk_dpio_dev *dpio_dev;
+		struct dpaa2_dpio_dev *dpio_dev;
 		struct qbman_swp *swp;
 
 		if (dpio)
@@ -962,7 +969,7 @@ static inline int32_t odp_unset_push_mode(odp_schedule_group_t group, struct nad
 		/*Check that device is not NULL*/
 
 		/*Get conc attributes so that channel ID can be mapped*/
-		nadk_conc_get_attributes(conc_dev, &attr);
+		dpaa2_conc_get_attributes(conc_dev, &attr);
 		/*Configure QBMAN for removal of static dequeue command*/
 
 		for (i = 0; i < dpio_dev->ch_count; i++) {
@@ -977,9 +984,9 @@ static inline int32_t odp_unset_push_mode(odp_schedule_group_t group, struct nad
 					return -1;
 				}
 
-				sched->sched_grp[group].ch_index = NADK_INVALID_CHANNEL_IDX;
+				sched->sched_grp[group].ch_index = DPAA2_INVALID_CHANNEL_IDX;
 				if (i == dpio_dev->ch_count - 1)
-					dpio_dev->ch_idx[i] = NADK_INVALID_CHANNEL_IDX;
+					dpio_dev->ch_idx[i] = DPAA2_INVALID_CHANNEL_IDX;
 				else
 					dpio_dev->ch_idx[i] = dpio_dev->ch_idx[dpio_dev->ch_count];
 				dpio_dev->ch_count--;
@@ -1009,9 +1016,9 @@ odp_schedule_group_t odp_schedule_group_create(const char *name,
 				return group;
 			}
 
-			retcode = nadk_dev_start(sched->sched_grp[i].conc_dev);
-			if (NADK_FAILURE == retcode) {
-				ODP_ERR("Failed Conc - nadk_dev_start\n");
+			retcode = dpaa2_conc_start(sched->sched_grp[i].conc_dev);
+			if (DPAA2_FAILURE == retcode) {
+				ODP_ERR("Failed Conc - dpaa2_conc_start\n");
 				odp_spinlock_unlock(&sched->grp_lock);
 				return group;
 			}
@@ -1041,10 +1048,10 @@ int odp_schedule_group_destroy(odp_schedule_group_t group)
 		memset(sched->sched_grp[group].name, 0,
 				ODP_SCHED_GROUP_NAME_LEN);
 		if (sched->sched_grp[group].conc_dev) {
-			retcode = nadk_dev_stop(sched->sched_grp[group].conc_dev);
-			if (NADK_FAILURE == retcode) {
+			retcode = dpaa2_conc_stop(sched->sched_grp[group].conc_dev);
+			if (DPAA2_FAILURE == retcode) {
 				odp_spinlock_unlock(&sched->grp_lock);
-				ODP_ERR("Failed Conc - nadk_dev_stop\n");
+				ODP_ERR("Failed Conc - dpaa2_conc_stop\n");
 				return -1;
 			}
 			sched->sched_grp[group].conc_dev = NULL;
@@ -1151,5 +1158,5 @@ int odp_schedule_group_thrmask(odp_schedule_group_t group,
 
 void odp_schedule_prefetch(int num ODP_UNUSED)
 {
-	ODP_UNIMPLEMENTED();
+	return;
 }

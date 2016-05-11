@@ -19,7 +19,7 @@ extern "C" {
 #endif
 
 #include <odp/std_types.h>
-#include <nadk/rts/nadk_memzone.h>
+#include <odp/plat/sdk/rts/dpaa2_memzone.h>
 #include <odp/plat/strong_types.h>
 
 /** @addtogroup odp_shared_memory ODP SHARED MEMORY
@@ -27,7 +27,7 @@ extern "C" {
  *  @{
  */
 
-typedef struct nadk_memzone *odp_shm_t;
+typedef struct dpaa2_memzone *odp_shm_t;
 
 #define ODP_SHM_INVALID _odp_cast_scalar(odp_shm_t, 0)
 #define ODP_SHM_NULL ODP_SHM_INVALID

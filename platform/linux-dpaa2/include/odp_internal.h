@@ -86,12 +86,12 @@ int odpfsl_ci_term_global(void);
 
 void _odp_flush_caches(void);
 
-/*NADK specific Definitions*/
+/*DPAA2 specific Definitions*/
 
 /*******************MACRO*******************/
-#define NADK_MAX_ETH_DEV        16
-#define NADK_MAX_CONC_DEV        8
-#define NADK_MAX_CI_DEV		128
+#define DPAA2_MAX_ETH_DEV        16
+#define DPAA2_MAX_CONC_DEV        8
+#define DPAA2_MAX_CI_DEV		128
 
 /* Enable QBMan Short Circuit Mode with ISOL CPU for benchmarking purpose */
 #define  ODPFSL_DRIVER_LB		0
@@ -101,7 +101,7 @@ void _odp_flush_caches(void);
 /*
  * Structure to contains available resource count at underlying layers.
  */
-struct nadk_resource_cnt {
+struct dpaa2_resource_cnt {
 	uint32_t eth_dev_cnt;
 	uint32_t conc_dev_cnt;
 	uint32_t ci_dev_cnt;
@@ -112,21 +112,21 @@ struct nadk_resource_cnt {
 /*
  * Structure to contains available resources.
  */
-struct nadk_resources {
-	struct nadk_resource_cnt res_cnt;
-	struct nadk_dev *net_dev[NADK_MAX_ETH_DEV];
-	struct nadk_dev *conc_dev[NADK_MAX_CONC_DEV];
-	struct nadk_dev *ci_dev[NADK_MAX_CI_DEV];
+struct dpaa2_resources {
+	struct dpaa2_resource_cnt res_cnt;
+	struct dpaa2_dev *net_dev[DPAA2_MAX_ETH_DEV];
+	struct dpaa2_dev *conc_dev[DPAA2_MAX_CONC_DEV];
+	struct dpaa2_dev *ci_dev[DPAA2_MAX_CI_DEV];
 };
 
 /************EXTERN DEFINITION*******************/
-extern struct nadk_resources nadk_res;
+extern struct dpaa2_resources dpaa2_res;
 
-struct nadk_dev *odp_get_inactive_conc_dev(void);
+struct dpaa2_dev *odp_get_inactive_conc_dev(void);
 
-struct nadk_dev *odp_get_nadk_eth_dev(const char *dev_name);
+struct dpaa2_dev *odp_get_dpaa2_eth_dev(const char *dev_name);
 
-int32_t odp_nadk_scan_device_list(uint32_t dev_type);
+int32_t odp_dpaa2_scan_device_list(uint32_t dev_type);
 
 #ifdef __cplusplus
 }

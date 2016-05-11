@@ -224,7 +224,7 @@ AC_ARG_ENABLE([debug],
     [if ! test "x$enableval" = "xyes"; then
         ODP_DEBUG=0
     fi])
-ODP_CFLAGS="$ODP_CFLAGS -DODP_DEBUG=$ODP_DEBUG -DNADK_AIOP_CI_DEVICE -DNADK_LOGLIB_DISABLE -DQODP_464 -DQODP_344"
+ODP_CFLAGS="$ODP_CFLAGS -DODP_DEBUG=$ODP_DEBUG -DDPAA2_LOGLIB_DISABLE -DQODP_464 -DQODP_344"
 
 ##########################################################################
 # Check for doxygen availability

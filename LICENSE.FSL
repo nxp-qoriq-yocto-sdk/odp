@@ -18,4 +18,4 @@ as Kernel space modules. These files can be used under BSD-3 License or GPLv2
 license. BSD-3 and GPLv2 Lincense texts are available in respective files stated
 above.
 List of files having DUAL License:
-- /platform/linux-dpaa2/include/nadk/kni/nadk_kni_common.h
+- /platform/linux-dpaa2/include/dpaa2/kni/odpfsl_kni_common.h

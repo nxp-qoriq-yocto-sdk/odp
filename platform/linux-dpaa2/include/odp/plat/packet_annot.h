@@ -17,9 +17,9 @@
 extern "C" {
 #endif
 
-extern int32_t nadk_mbuf_sw_annotation;
-#define NADK_MBUF_HW_ANNOTATION 64U
-#define NADK_MBUF_SW_ANNOTATION nadk_mbuf_sw_annotation
+extern int32_t dpaa2_mbuf_sw_annotation;
+#define DPAA2_MBUF_HW_ANNOTATION 64U
+#define DPAA2_MBUF_SW_ANNOTATION dpaa2_mbuf_sw_annotation
 
 /**
  * Internal Packet metadata header

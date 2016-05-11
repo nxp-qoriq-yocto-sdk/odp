@@ -29,7 +29,7 @@ extern "C" {
 #include <odp_packet_io_internal.h>
 #include <odp_queue_internal.h>
 #include <fsl_dpni.h>
-#include <nadk_queue.h>
+#include <dpaa2_queue.h>
 
 /* Maximum Class Of Service Entry */
 #define ODP_COS_MAX_ENTRY		64

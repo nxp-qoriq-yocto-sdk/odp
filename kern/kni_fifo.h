@@ -25,13 +25,13 @@
 #ifndef _KNI_FIFO_H_
 #define _KNI_FIFO_H_
 
-#include "../platform/linux-dpaa2/kni/nadk_kni_common.h"
+#include "../platform/linux-dpaa2/kni/odpfsl_kni_common.h"
 
 /**
  * Adds num elements into the fifo. Return the number actually written
  */
 static inline unsigned
-kni_fifo_put(struct nadk_kni_fifo *fifo, void **data, unsigned num)
+kni_fifo_put(struct odpfsl_kni_fifo *fifo, void **data, unsigned num)
 {
 	unsigned i = 0;
 	unsigned fifo_write = fifo->write;
@@ -55,7 +55,7 @@ kni_fifo_put(struct nadk_kni_fifo *fifo, void **data, unsigned num)
  * Get up to num elements from the fifo. Return the number actully read
  */
 static inline unsigned
-kni_fifo_get(struct nadk_kni_fifo *fifo, void **data, unsigned num)
+kni_fifo_get(struct odpfsl_kni_fifo *fifo, void **data, unsigned num)
 {
 	unsigned i = 0;
 	unsigned new_read = fifo->read;
@@ -77,7 +77,7 @@ kni_fifo_get(struct nadk_kni_fifo *fifo, void **data, unsigned num)
  * Get the num of elements in the fifo
  */
 static inline unsigned
-kni_fifo_count(struct nadk_kni_fifo *fifo)
+kni_fifo_count(struct odpfsl_kni_fifo *fifo)
 {
 	return (fifo->len + fifo->write - fifo->read) & ( fifo->len - 1);
 }
@@ -86,17 +86,17 @@ kni_fifo_count(struct nadk_kni_fifo *fifo)
  * Get the num of available elements in the fifo
  */
 static inline unsigned
-kni_fifo_free_count(struct nadk_kni_fifo *fifo)
+kni_fifo_free_count(struct odpfsl_kni_fifo *fifo)
 {
 	return (fifo->read - fifo->write - 1) & (fifo->len - 1);
 }
 
-#ifdef NADK_KNI_VHOST
+#ifdef DPAA2_KNI_VHOST
 /**
  * Initializes the kni fifo structure
  */
 static inline void
-kni_fifo_init(struct nadk_kni_fifo *fifo, unsigned size)
+kni_fifo_init(struct odpfsl_kni_fifo *fifo, unsigned size)
 {
 	fifo->write = 0;
 	fifo->read = 0;

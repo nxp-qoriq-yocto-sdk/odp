@@ -32,11 +32,11 @@
 #include <linux/spinlock.h>
 #include <linux/list.h>
 
-#ifdef NADK_KNI_VHOST
+#ifdef DPAA2_KNI_VHOST
 #include <net/sock.h>
 #endif
 
-#include "../platform/linux-dpaa2/kni/nadk_kni_common.h"
+#include "../platform/linux-dpaa2/kni/odpfsl_kni_common.h"
 #define KNI_KTHREAD_RESCHEDULE_INTERVAL 5 /* us */
 
 /**
@@ -51,7 +51,7 @@ struct kni_dev {
 	int status;
 	uint16_t group_id;	/* Group ID of a group of KNI devices */
 	unsigned core_id;	/* Core ID to bind */
-	char name[NADK_KNI_NAMESIZE]; /* Network device name */
+	char name[DPAA2_KNI_NAMESIZE]; /* Network device name */
 	struct task_struct *pthread;
 	void *usrctxt; /* User space process context*/
 
@@ -97,7 +97,7 @@ struct kni_dev {
 	/* synchro for request processing */
 	unsigned long synchro;
 
-#ifdef NADK_KNI_VHOST
+#ifdef DPAA2_KNI_VHOST
 	struct kni_vhost_queue* vhost_queue;
 	volatile enum {
 		BE_STOP = 0x1,
@@ -116,7 +116,7 @@ struct kni_dev {
 	#define KNI_DBG(args...)
 #endif
 
-#ifdef NADK_KNI_VHOST
+#ifdef DPAA2_KNI_VHOST
 unsigned int
 kni_poll(struct file *file, struct socket *sock, poll_table * wait);
 int kni_chk_vhost_rx(struct kni_dev *kni);
@@ -131,18 +131,18 @@ struct kni_vhost_queue {
 	int sockfd;
 	unsigned int flags;
 	struct sk_buff* cache;
-	struct nadk_kni_fifo* fifo;
+	struct odpfsl_kni_fifo* fifo;
 };
 
 #endif
 
-#ifdef NADK_KNI_VHOST_DEBUG_RX
+#ifdef DPAA2_KNI_VHOST_DEBUG_RX
 	#define KNI_DBG_RX(args...) printk(KERN_DEBUG "KNI RX: " args)
 #else
 	#define KNI_DBG_RX(args...)
 #endif
 
-#ifdef NADK_KNI_VHOST_DEBUG_TX
+#ifdef DPAA2_KNI_VHOST_DEBUG_TX
 	#define KNI_DBG_TX(args...) printk(KERN_DEBUG "KNI TX: " args)
 #else
 	#define KNI_DBG_TX(args...)

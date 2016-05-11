@@ -34,7 +34,7 @@
 #include <linux/rwsem.h>
 #include <linux/mm.h>
 
-#include "../platform/linux-dpaa2/kni/nadk_kni_common.h"
+#include "../platform/linux-dpaa2/kni/odpfsl_kni_common.h"
 #include "kni_dev.h"
 
 MODULE_LICENSE("Dual BSD/GPL");
@@ -188,7 +188,7 @@ kni_release(struct inode *inode, struct file *file)
 			dev->pthread = NULL;
 		}
 
-#ifdef NADK_KNI_VHOST
+#ifdef DPAA2_KNI_VHOST
 		kni_vhost_backend_release(dev);
 #endif
 		/*per application KNI interfaces removal.*/
@@ -213,7 +213,7 @@ kni_thread_single(void *unused)
 		for (j = 0; j < KNI_RX_LOOP_NUM; j++) {
 			list_for_each_entry_safe(dev, n,
 					&kni_list_head, list) {
-#ifdef NADK_KNI_VHOST
+#ifdef DPAA2_KNI_VHOST
 				kni_chk_vhost_rx(dev);
 #else
 				kni_net_rx(dev);
@@ -238,7 +238,7 @@ kni_thread_multiple(void *param)
 
 	while (!kthread_should_stop()) {
 		for (j = 0; j < KNI_RX_LOOP_NUM; j++) {
-#ifdef NADK_KNI_VHOST
+#ifdef DPAA2_KNI_VHOST
 			kni_chk_vhost_rx(dev);
 #else
 			kni_net_rx(dev);
@@ -266,13 +266,13 @@ kni_dev_remove(struct kni_dev *dev)
 }
 
 static int
-kni_check_param(struct kni_dev *kni, struct nadk_kni_device_info *dev)
+kni_check_param(struct kni_dev *kni, struct odpfsl_kni_device_info *dev)
 {
 	if (!kni || !dev)
 		return -1;
 
 	/* Check if network name has been used */
-	if (!strncmp(kni->name, dev->name, NADK_KNI_NAMESIZE)) {
+	if (!strncmp(kni->name, dev->name, DPAA2_KNI_NAMESIZE)) {
 		KNI_ERR("KNI name %s duplicated\n", dev->name);
 		return -1;
 	}
@@ -281,7 +281,7 @@ kni_check_param(struct kni_dev *kni, struct nadk_kni_device_info *dev)
 }
 
 static int kni_phys_to_virt(struct kni_dev *kni,
-	struct nadk_kni_device_info *dev_info)
+	struct odpfsl_kni_device_info *dev_info)
 {
 	kni->tx_q = phys_to_virt(dev_info->tx_phys);
 	if (!kni->tx_q || ((uintptr_t)kni->tx_q == dev_info->tx_phys)) {
@@ -302,7 +302,7 @@ static int kni_phys_to_virt(struct kni_dev *kni,
 
 #ifndef CONFIG_64BIT
 static int kni_ioremap(struct kni_dev *kni,
-	struct nadk_kni_device_info *dev_info)
+	struct odpfsl_kni_device_info *dev_info)
 {
 #ifdef CONFIG_QORIQ
 	kni->tx_q = ioremap_prot(dev_info->tx_phys, KNI_FIFO_SIZE, 0);
@@ -344,7 +344,7 @@ kni_ioctl_create(struct file *f,
 	unsigned int ioctl_num, unsigned long ioctl_param)
 {
 	int ret;
-	struct nadk_kni_device_info dev_info;
+	struct odpfsl_kni_device_info dev_info;
 	struct net_device *net_dev = NULL;
 	struct kni_dev *kni, *dev, *n;
 	struct net *net;
@@ -403,7 +403,7 @@ kni_ioctl_create(struct file *f,
 	kni->net_dev = net_dev;
 	kni->group_id = dev_info.group_id;
 	kni->core_id = dev_info.core_id;
-	strncpy(kni->name, dev_info.name, NADK_KNI_NAMESIZE);
+	strncpy(kni->name, dev_info.name, DPAA2_KNI_NAMESIZE);
 
 	/* Translate user space info into kernel space info */
 
@@ -426,7 +426,7 @@ kni_ioctl_create(struct file *f,
 	kni->sync_va = dev_info.sync_va;
 	kni->kbuf_va = dev_info.kbuf_va;
 
-#ifdef NADK_KNI_VHOST
+#ifdef DPAA2_KNI_VHOST
 	kni->vhost_queue = NULL;
 	kni->vq_status = BE_STOP;
 #endif
@@ -471,7 +471,7 @@ kni_ioctl_create(struct file *f,
 	pr_info("###created device %s mtu %d, ret =%d\n",
 		net_dev->name, net_dev->mtu, ret);
 
-#ifdef NADK_KNI_VHOST
+#ifdef DPAA2_KNI_VHOST
 	kni_vhost_init(kni);
 #endif
 
@@ -505,7 +505,7 @@ kni_ioctl_release(struct file *f,
 {
 	int ret = -EINVAL;
 	struct kni_dev *dev, *n;
-	struct nadk_kni_device_info dev_info;
+	struct odpfsl_kni_device_info dev_info;
 
 	if (_IOC_SIZE(ioctl_num) > sizeof(dev_info))
 			return -EINVAL;
@@ -530,7 +530,7 @@ kni_ioctl_release(struct file *f,
 			dev->pthread = NULL;
 		}
 
-#ifdef NADK_KNI_VHOST
+#ifdef DPAA2_KNI_VHOST
 		kni_vhost_backend_release(dev);
 #endif
 		kni_dev_remove(dev);
@@ -559,13 +559,13 @@ kni_ioctl(struct file *f,
 	 * Switch according to the ioctl called
 	 */
 	switch (_IOC_NR(ioctl_num)) {
-	case _IOC_NR(NADK_KNI_IOCTL_TEST):
+	case _IOC_NR(DPAA2_KNI_IOCTL_TEST):
 		/* For test only, not used */
 		break;
-	case _IOC_NR(NADK_KNI_IOCTL_CREATE):
+	case _IOC_NR(DPAA2_KNI_IOCTL_CREATE):
 		ret = kni_ioctl_create(f, ioctl_num, ioctl_param);
 		break;
-	case _IOC_NR(NADK_KNI_IOCTL_RELEASE):
+	case _IOC_NR(DPAA2_KNI_IOCTL_RELEASE):
 		ret = kni_ioctl_release(f, ioctl_num, ioctl_param);
 		break;
 	default:

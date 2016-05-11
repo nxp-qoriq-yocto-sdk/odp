@@ -13,4 +13,4 @@ SUBDIRS = @platform_with_platform@ \
 include $(top_srcdir)/aminclude.am
 
 EXTRA_DIST = bootstrap $(DX_CONFIG) config/README
-#nobase_dist_pkgdata_DATA = $(top_srcdir)/kern/nadk_kni.ko
+#nobase_dist_pkgdata_DATA = $(top_srcdir)/kern/odpfsl_kni.ko

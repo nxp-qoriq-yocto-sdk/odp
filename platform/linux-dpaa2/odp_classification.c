@@ -11,6 +11,7 @@
 #include <odp/align.h>
 #include <odp/queue.h>
 #include <odp/debug.h>
+#include <odp/config.h>
 #include <odp_internal.h>
 #include <odp_debug_internal.h>
 #include <odp_packet_internal.h>
@@ -19,12 +20,14 @@
 #include <odp_packet_io_internal.h>
 #include <odp_classification_datamodel.h>
 #include <odp_classification_internal.h>
+#include <odp_schedule_internal.h>
 #include <odp_pool_internal.h>
-#include <nadk_dev_priv.h>
-#include <nadk_eth_priv.h>
-#include <nadk_conc_priv.h>
-#include <nadk_io_portal_priv.h>
-#include <nadk_queue.h>
+#include <dpaa2_dev_priv.h>
+#include <dpaa2_eth_priv.h>
+#include <dpaa2_conc_priv.h>
+#include <dpaa2_io_portal_priv.h>
+#include <dpaa2_queue.h>
+#include <dpaa2_vq.h>
 #include <odp/shared_memory.h>
 #include <odp/helper/eth.h>
 #include <string.h>
@@ -77,6 +80,11 @@ pmr_info_t pmr_info[DPKG_MAX_NUM_OF_EXTRACTS] = {
 static struct rule pmr_rule_list[ODP_CONFIG_PKTIO_ENTRIES];
 static struct rule l2_rule_list[ODP_CONFIG_PKTIO_ENTRIES];
 static struct rule l3_rule_list[ODP_CONFIG_PKTIO_ENTRIES];
+
+extern void *dpaa2_eth_cb_dqrr_fd_to_mbuf(
+		struct qbman_swp *qm,
+		const struct qbman_fd *fd,
+		const struct qbman_result *dqrr);
 
 cos_t *get_cos_entry_internal(odp_cos_t cos_id)
 {
@@ -487,6 +495,21 @@ int odp_cos_queue_set(odp_cos_t cos_id, odp_queue_t queue_id)
 	return 0;
 }
 
+odp_queue_t odp_cos_queue(odp_cos_t cos_id)
+{
+	cos_t			*cos;
+	queue_entry_t	*queue;
+
+	cos = get_cos_entry(cos_id);
+	if (!cos) {
+		ODP_ERR("Invalid odp_cos_t handle");
+		return ODP_QUEUE_INVALID;
+	}
+
+	queue = cos->s.queue;
+	return queue->s.handle;
+}
+
 int odp_cos_drop_set(odp_cos_t cos_id ODP_UNUSED, odp_drop_e drop_policy ODP_UNUSED)
 {
 	ODP_UNIMPLEMENTED();
@@ -499,13 +522,13 @@ static int32_t odp_offload_rules(odp_pktio_t pktio)
 	struct exact_match_rule	*fs_rule;
 	int32_t	retcode;
 	uint32_t index = (uint64_t)pktio - 1;
-	struct nadk_dev		*dev;
-	struct nadk_dev_priv	*dev_priv;
+	struct dpaa2_dev		*dev;
+	struct dpaa2_dev_priv	*dev_priv;
 	struct fsl_mc_io	*dpni;
 
 	/*Get pktio entry where rules are to be applied*/
 	entry = get_pktio_entry(pktio);
-	dev = entry->s.pkt_nadk.dev;
+	dev = entry->s.pkt_dpaa2.dev;
 	dev_priv = dev->priv;
 	dpni = dev_priv->hw;
 
@@ -576,9 +599,9 @@ int odp_pktio_default_cos_set(odp_pktio_t pktio_in, odp_cos_t default_cos)
 	pktio_entry_t *entry;
 	queue_entry_t *queue;
 	cos_t *cos;
-	struct nadk_vq_param cfg;
-	struct nadk_dev *dev;
-	struct nadk_dev_priv	*dev_priv;
+	struct dpaa2_vq_param cfg;
+	struct dpaa2_dev *dev;
+	struct dpaa2_dev_priv	*dev_priv;
 	struct fsl_mc_io	*dpni;
 	struct dpni_rx_tc_dist_cfg	*tc_cfg;
 
@@ -594,7 +617,7 @@ int odp_pktio_default_cos_set(odp_pktio_t pktio_in, odp_cos_t default_cos)
 	}
 
 	/*Connect a default H/W FQ of given pktio*/
-	dev = entry->s.pkt_nadk.dev;
+	dev = entry->s.pkt_dpaa2.dev;
 	dev_priv = dev->priv;
 	dpni = dev_priv->hw;
 	tc_cfg = &entry->s.cls.tc_cfg;
@@ -626,10 +649,10 @@ int odp_pktio_default_cos_set(odp_pktio_t pktio_in, odp_cos_t default_cos)
 	if (retcode < 0)
 		return -1;
 
-	/* Configure queue handle into nadk device vq so that ODP can retrieve
-	 * queue handle from the nadk device VQ.
+	/* Configure queue handle into dpaa2 device vq so that ODP can retrieve
+	 * queue handle from the dpaa2 device VQ.
 	 */
-	nadk_dev_set_vq_handle(dev->rx_vq[ODP_CLS_DEFAULT_FLOW],
+	dpaa2_dev_set_vq_handle(dev->rx_vq[ODP_CLS_DEFAULT_FLOW],
 						(uint64_t)queue->s.handle);
 
 	/*Update input and output device in ODP queue structure*/
@@ -637,7 +660,7 @@ int odp_pktio_default_cos_set(odp_pktio_t pktio_in, odp_cos_t default_cos)
 	queue->s.pktout = pktio_in;
 
 	/*Configure the queue propeties at H/W with configuration updated above*/
-	retcode = nadk_eth_setup_rx_vq(dev, ODP_CLS_DEFAULT_FLOW, &cfg);
+	retcode = dpaa2_eth_setup_rx_vq(dev, ODP_CLS_DEFAULT_FLOW, &cfg);
 	if (retcode < 0) {
 		ODP_ERR("Error in setup Rx flow");
 		return -1;
@@ -664,31 +687,110 @@ int odp_pktio_error_cos_set(odp_pktio_t pktio_in, odp_cos_t error_cos)
 {
 	pktio_entry_t *entry;
 	cos_t *cos;
+	int32_t retcode;
+	queue_entry_t *queue;
+	struct dpaa2_dev *dev;
+	struct dpaa2_dev_priv	*dev_priv;
+	struct fsl_mc_io	*dpni;
+	struct dpni_queue_cfg cfg;
+	struct dpni_error_cfg	err_cfg;
+	struct dpaa2_dev *conc_dev;
+	struct dpni_queue_attr attr;
+	struct dpaa2_vq *eth_err_vq;
 
 	entry = get_pktio_entry(pktio_in);
-	if (entry == NULL) {
+	if (!entry) {
 		ODP_ERR("Invalid odp_pktio_t handle");
 		return -1;
 	}
 
 	cos = get_cos_entry(error_cos);
-	if (cos == NULL) {
+	if (!cos) {
 		ODP_ERR("Invalid odp_cos_t handle");
 		return -1;
 	}
-	/*TODO: Currently This API is not supported. Placing below code as a
-		placeholder
-	*/
-#if 0
-	int dpni_set_rx_err_queue(struct fsl_mc_io	*mc_io,
-			  uint16_t			token,
-			  const struct dpni_queue_cfg	*cfg);
 
-	int dpni_get_rx_err_queue(struct fsl_mc_io	*mc_io,
-			  uint16_t			token,
-			  struct dpni_queue_attr	*attr);
-#endif
-	ODP_UNIMPLEMENTED();
+	/*Connect a default H/W FQ of given pktio*/
+	dev = entry->s.pkt_dpaa2.dev;
+	dev_priv = dev->priv;
+	dpni = dev_priv->hw;
+	memset(&cfg, 0, sizeof(struct dpni_queue_cfg));
+	memset(&err_cfg, 0, sizeof(struct dpni_error_cfg));
+
+	/*Update input and output device in ODP queue structure*/
+	queue = cos->s.queue;
+	queue->s.pktin = pktio_in;
+	queue->s.pktout = pktio_in;
+
+	eth_err_vq = (struct dpaa2_vq *)dev->err_vq[DEF_ERR_VQ_INDEX];
+	if (queue->s.queue_param_set) {
+		struct conc_attr attr;
+
+		memset(&attr, 0, sizeof(struct conc_attr));
+		conc_dev    = odp_get_conc_from_grp(queue->s.param.sched.group);
+		/*Get DPCONC object attributes*/
+		dpaa2_conc_get_attributes(conc_dev, &attr);
+
+		/*Do settings to get the frame on a DPCON object*/
+		cfg.options = DPNI_QUEUE_OPT_DEST;
+		if (queue->s.param.sched.sync & ODP_SCHED_SYNC_ATOMIC) {
+			cfg.options = cfg.options |
+				DPNI_QUEUE_OPT_ORDER_PRESERVATION;
+			cfg.order_preservation_en = TRUE;
+		}
+		cfg.dest_cfg.dest_type	= DPNI_DEST_DPCON;
+		cfg.dest_cfg.priority = queue->s.param.sched.prio;
+		cfg.dest_cfg.dest_id	= attr.obj_id;
+		dev->conc_dev		= conc_dev;
+	}
+
+	cfg.options = cfg.options | DPNI_QUEUE_OPT_USER_CTX;
+	cfg.user_ctx = (uint64_t)(eth_err_vq);
+
+	/*Lets map user created to underlying error queue*/
+	retcode = dpni_set_rx_err_queue(dpni, CMD_PRI_LOW, dev_priv->token,
+					&cfg);
+	if (retcode) {
+		ODP_ERR("dpni_set_rx_err_queue() Failed: ErrorCode = %d\n",
+			retcode);
+		return -1;
+	}
+
+	retcode = dpni_get_rx_err_queue(dpni, CMD_PRI_LOW, dev_priv->token,
+					&attr);
+	if (retcode) {
+		ODP_ERR("dpni_get_rx_err_queue() Failed: ErrorCode = %d\n",
+			retcode);
+		return -1;
+	}
+
+	err_cfg.errors = DPNI_ERROR_EOFHE |
+					DPNI_ERROR_FLE |
+					DPNI_ERROR_FPE |
+					DPNI_ERROR_PHE |
+					DPNI_ERROR_L3CE |
+					DPNI_ERROR_L4CE;
+
+	err_cfg.error_action = DPNI_ERROR_ACTION_SEND_TO_ERROR_QUEUE;
+	err_cfg.error_action = TRUE;
+
+	retcode = dpni_set_errors_behavior(dpni, CMD_PRI_LOW, dev_priv->token,
+					   &err_cfg);
+	if (retcode) {
+		ODP_ERR("dpni_set_errors_behavior() Failed: ErrorCode = %d\n",
+			retcode);
+		return -1;
+	}
+
+	retcode = odp_add_queue_to_group(queue->s.param.sched.group);
+	if (retcode == 1)
+		odp_affine_group(queue->s.param.sched.group, NULL);
+
+	dpaa2_dev_set_vq_handle(eth_err_vq, (uint64_t)queue->s.handle);
+	eth_err_vq->fq_type = DPAA2_FQ_TYPE_RX_ERR;
+	eth_err_vq->qmfq.cb = dpaa2_eth_cb_dqrr_fd_to_mbuf;
+	eth_err_vq->fqid = attr.fqid;
+	cos->s.queue->s.priv = eth_err_vq;
 	return 0;
 }
 
@@ -698,9 +800,66 @@ int odp_pktio_skip_set(odp_pktio_t pktio_in ODP_UNUSED, uint32_t offset ODP_UNUS
 	return 0;
 }
 
-int odp_pktio_headroom_set(odp_pktio_t pktio_in ODP_UNUSED, uint32_t headroom ODP_UNUSED)
+int odp_pktio_headroom_set(odp_pktio_t pktio_in, uint32_t headroom)
 {
-	ODP_UNIMPLEMENTED();
+	pktio_entry_t *entry;
+	struct dpaa2_dev *dev;
+	struct dpaa2_dev_priv *dev_priv;
+	struct fsl_mc_io *dpni;
+	struct dpni_buffer_layout layout;
+	int ret, tot_size;
+
+	/*Get pktio entry where rules are to be applied*/
+	entry = get_pktio_entry(pktio_in);
+	if (!entry) {
+		ODP_ERR("Invalid odp_pktio_t handle");
+		return -1;
+	}
+
+	/*Check for maximum headroom value*/
+	if (headroom > ODP_CONFIG_PACKET_HEADROOM) {
+		ODP_ERR("headroom size %d exceeds the maximum limit\n",
+			headroom);
+		return -1;
+	}
+
+	dev = entry->s.pkt_dpaa2.dev;
+	dev_priv = dev->priv;
+	dpni = dev_priv->hw;
+
+	/*Check alignment for buffer layouts first*/
+	tot_size = dpaa2_mbuf_sw_annotation + DPAA2_MBUF_HW_ANNOTATION +
+			 headroom;
+	tot_size = ODP_ALIGN_ROUNDUP(tot_size, ODP_PACKET_LAYOUT_ALIGN);
+	headroom = tot_size - (dpaa2_mbuf_sw_annotation +
+					DPAA2_MBUF_HW_ANNOTATION);
+
+	memset(&layout, 0, sizeof(struct dpni_buffer_layout));
+	layout.options = DPNI_BUF_LAYOUT_OPT_DATA_HEAD_ROOM;
+	layout.data_head_room = headroom;
+
+	/*DPNI must be disable before configuring rx buffer layout*/
+	ret = dpni_disable(dpni, CMD_PRI_LOW, dev_priv->token);
+	if (ret) {
+		ODP_ERR("dpni_disable() failed for device."
+			"err code: %d\n", dev->dev_string, ret);
+		return ret;
+	}
+	ret = dpni_set_rx_buffer_layout(dpni, CMD_PRI_LOW, dev_priv->token,
+					&layout);
+	if (ret) {
+		ODP_ERR("Setting headroom failed for device %s."
+			"err code: %d\n", dev->dev_string, ret);
+		return ret;
+	}
+	ret = dpni_enable(dpni, CMD_PRI_LOW, dev_priv->token);
+	if (ret) {
+		ODP_ERR("dpni_enable() failed for device."
+			"err code: %d\n", dev->dev_string, ret);
+		return ret;
+	}
+	ODP_DBG("Configured headroom %d  for device %s\n", headroom,
+		dev->dev_string);
 	return 0;
 }
 
@@ -710,8 +869,8 @@ static void odp_delete_l2_rule_list(odp_pktio_t pktio)
 	uint32_t index = (uint64_t)pktio - 1;
 
 	TAILQ_FOREACH(temp_rule, &l2_rule_list[index], next) {
-		nadk_data_free((void *)temp_rule->rule->key_iova);
-		nadk_data_free((void *)temp_rule->rule->mask_iova);
+		dpaa2_data_free((void *)temp_rule->rule->key_iova);
+		dpaa2_data_free((void *)temp_rule->rule->mask_iova);
 	}
 }
 
@@ -721,8 +880,8 @@ static void odp_delete_l3_rule_list(odp_pktio_t pktio)
 	uint32_t index = (uint64_t)pktio - 1;
 
 	TAILQ_FOREACH(temp_rule, &l3_rule_list[index], next) {
-		nadk_data_free((void *)temp_rule->rule->key_iova);
-		nadk_data_free((void *)temp_rule->rule->mask_iova);
+		dpaa2_data_free((void *)temp_rule->rule->key_iova);
+		dpaa2_data_free((void *)temp_rule->rule->mask_iova);
 	}
 }
 
@@ -739,9 +898,9 @@ int odp_cos_with_l2_priority(odp_pktio_t pktio_in, uint8_t num_qos,
 	queue_entry_t *queue[8];
 	void *params[2];
 	int32_t retcode;
-	struct nadk_vq_param	cfg[8];
-	struct nadk_dev		*dev;
-	struct nadk_dev_priv	*dev_priv;
+	struct dpaa2_vq_param	cfg[8];
+	struct dpaa2_dev		*dev;
+	struct dpaa2_dev_priv	*dev_priv;
 	struct fsl_mc_io	*dpni;
 	uint16_t		flow_id;
 	struct dpni_rx_tc_dist_cfg	*tc_cfg;
@@ -753,7 +912,7 @@ int odp_cos_with_l2_priority(odp_pktio_t pktio_in, uint8_t num_qos,
 		ODP_ERR("Invalid odp_pktio_t handle");
 		return -1;
 	}
-	dev = entry->s.pkt_nadk.dev;
+	dev = entry->s.pkt_dpaa2.dev;
 	dev_priv = dev->priv;
 	dpni = dev_priv->hw;
 	flow_id = entry->s.cls.flow_id;
@@ -795,7 +954,7 @@ int odp_cos_with_l2_priority(odp_pktio_t pktio_in, uint8_t num_qos,
 		if (pmr_id[i] == ODP_PMR_INVAL)
 			return -1;
 
-		qos_value = (uint8_t *)nadk_calloc(NULL, 1,
+		qos_value = (uint8_t *)dpaa2_calloc(NULL, 1,
 						sizeof(uint16_t), 0);
 		if (!qos_value)
 			goto unlock_pmr_and_clean;
@@ -806,20 +965,20 @@ int odp_cos_with_l2_priority(odp_pktio_t pktio_in, uint8_t num_qos,
 		pmr[i]->s.term_value[0].mask = (uint64_t)&qos_mask;
 
 		/*Allocate memory for matching rule configuration at H/W.*/
-		params[0] = nadk_data_zmalloc(
+		params[0] = dpaa2_data_zmalloc(
 		NULL, DIST_PARAM_IOVA_SIZE, ODP_CACHE_LINE_SIZE);
 		if (!params[0]) {
 			ODP_ERR("Memory unavaialble");
-			nadk_free(qos_value);
+			dpaa2_free(qos_value);
 			goto unlock_pmr_and_clean;
 		}
 		/*Allocate memory for mask rule configuration at H/W.*/
-		params[1] = nadk_data_zmalloc(
+		params[1] = dpaa2_data_zmalloc(
 		NULL, DIST_PARAM_IOVA_SIZE, ODP_CACHE_LINE_SIZE);
 		if (!params[1]) {
 			ODP_ERR("Memory unavaialble");
-			nadk_free(qos_value);
-			nadk_data_free((void *)params[0]);
+			dpaa2_free(qos_value);
+			dpaa2_data_free((void *)params[0]);
 			goto unlock_pmr_and_clean;
 		}
 		/*Updating ODP database for PMR*/
@@ -835,7 +994,7 @@ int odp_cos_with_l2_priority(odp_pktio_t pktio_in, uint8_t num_qos,
 			queue[i] = cos->s.queue;
 			retcode = fill_queue_configuration(queue[i], &cfg[i]);
 			if (retcode < 0) {
-				nadk_free(qos_value);
+				dpaa2_free(qos_value);
 				goto unlock_pmr_and_clean;
 			}
 
@@ -844,38 +1003,38 @@ int odp_cos_with_l2_priority(odp_pktio_t pktio_in, uint8_t num_qos,
 			queue[i]->s.priv = dev->rx_vq[++flow_id];
 			/*TODO Need to update with variable value*/
 			cos->s.tc_id = ODP_CLS_DEFAULT_TC;
-			nadk_dev_set_vq_handle(dev->rx_vq[flow_id],
+			dpaa2_dev_set_vq_handle(dev->rx_vq[flow_id],
 					       (uint64_t)queue[i]->s.handle);
-			/*Update input and output nadk device in ODP queue*/
+			/*Update input and output dpaa2 device in ODP queue*/
 			queue[i]->s.pktin = pktio_in;
 			queue[i]->s.pktout = pktio_in;
 
 			if (flow_id < dev->num_rx_vqueues) {
-				retcode = nadk_eth_setup_rx_vq(dev, flow_id,
+				retcode = dpaa2_eth_setup_rx_vq(dev, flow_id,
 							       &cfg[i]);
 				if (retcode < 0) {
 					ODP_ERR("Error in setup Rx flow\n");
-					nadk_free(qos_value);
+					dpaa2_free(qos_value);
 					goto unlock_pmr_and_clean;
 				}
 			} else {
 				ODP_ERR("flow_id out of range\n");
-				nadk_free(qos_value);
+				dpaa2_free(qos_value);
 				goto unlock_pmr_and_clean;
 			}
 		} else {
 			ODP_ERR("NULL CoS entry found\n");
-			nadk_free(qos_value);
+			dpaa2_free(qos_value);
 			goto unlock_pmr_and_clean;
 		}
 
 		odp_configure_l2_prio_rule(entry, pmr[i]);
 		/*Update rule list*/
-		fs_rule = nadk_calloc(NULL, 1, sizeof(struct exact_match_rule),
+		fs_rule = dpaa2_calloc(NULL, 1, sizeof(struct exact_match_rule),
 				      0);
 		if (!fs_rule) {
 			ODP_ERR(" NO memory for DEVICE.\n");
-			nadk_free(qos_value);
+			dpaa2_free(qos_value);
 			goto unlock_pmr_and_clean;
 		}
 		fs_rule->tc_id = ODP_CLS_DEFAULT_TC;
@@ -888,7 +1047,7 @@ int odp_cos_with_l2_priority(odp_pktio_t pktio_in, uint8_t num_qos,
 		odp_insert_exact_match_rule(pktio_in, fs_rule);
 
 		/*Free allocated memory*/
-		nadk_free(qos_value);
+		dpaa2_free(qos_value);
 
 		/*Unlock PMR entry*/
 		CLS_UNLOCK(&pmr[i]->s.lock);
@@ -911,8 +1070,8 @@ unlock_pmr_and_clean:
 
 clean_allocated_resources:
 	for (j = 0; j < i; j++) {
-		nadk_data_free((void *)pmr[i]->s.rule.key_iova);
-		nadk_data_free((void *)pmr[i]->s.rule.mask_iova);
+		dpaa2_data_free((void *)pmr[i]->s.rule.key_iova);
+		dpaa2_data_free((void *)pmr[i]->s.rule.mask_iova);
 	}
 
 	/*Free allocated memory for L2 Shadow database*/
@@ -936,9 +1095,9 @@ int odp_cos_with_l3_qos(odp_pktio_t pktio_in,
 	queue_entry_t *queue[8];
 	void *params[2];
 	int32_t retcode;
-	struct nadk_vq_param	cfg[8];
-	struct nadk_dev		*dev;
-	struct nadk_dev_priv	*dev_priv;
+	struct dpaa2_vq_param	cfg[8];
+	struct dpaa2_dev		*dev;
+	struct dpaa2_dev_priv	*dev_priv;
 	struct fsl_mc_io	*dpni;
 	uint16_t		flow_id;
 	struct dpni_rx_tc_dist_cfg	*tc_cfg;
@@ -951,7 +1110,7 @@ int odp_cos_with_l3_qos(odp_pktio_t pktio_in,
 		return -1;
 	}
 	entry->s.cls.l3_precedence = l3_preference;
-	dev = entry->s.pkt_nadk.dev;
+	dev = entry->s.pkt_dpaa2.dev;
 	dev_priv = dev->priv;
 	dpni = dev_priv->hw;
 	flow_id = entry->s.cls.flow_id;
@@ -993,7 +1152,7 @@ int odp_cos_with_l3_qos(odp_pktio_t pktio_in,
 		if (pmr_id[i] == ODP_PMR_INVAL)
 			return -1;
 
-		qos_value = (uint8_t *)nadk_calloc(NULL, 1, sizeof(uint8_t), 0);
+		qos_value = (uint8_t *)dpaa2_calloc(NULL, 1, sizeof(uint8_t), 0);
 		if (!qos_value) {
 			ODP_ERR("Memory unavaialble");
 			goto unlock_pmr_and_clean;
@@ -1004,20 +1163,20 @@ int odp_cos_with_l3_qos(odp_pktio_t pktio_in,
 		pmr[i]->s.term_value[0].mask = (uint64_t)&qos_mask;
 
 		/*Allocate memory for matching rule configuration at H/W.*/
-		params[0] = nadk_data_zmalloc(
+		params[0] = dpaa2_data_zmalloc(
 		NULL, DIST_PARAM_IOVA_SIZE, ODP_CACHE_LINE_SIZE);
 		if (!params[0]) {
 			ODP_ERR("Memory unavaialble");
-			nadk_free(qos_value);
+			dpaa2_free(qos_value);
 			goto unlock_pmr_and_clean;
 		}
 		/*Allocate memory for mask rule configuration at H/W.*/
-		params[1] = nadk_data_zmalloc(
+		params[1] = dpaa2_data_zmalloc(
 		NULL, DIST_PARAM_IOVA_SIZE, ODP_CACHE_LINE_SIZE);
 		if (!params[1]) {
 			ODP_ERR("Memory unavaialble");
-			nadk_free(qos_value);
-			nadk_data_free((void *)params[0]);
+			dpaa2_free(qos_value);
+			dpaa2_data_free((void *)params[0]);
 			goto unlock_pmr_and_clean;
 		}
 		/*Updating ODP database for PMR*/
@@ -1033,7 +1192,7 @@ int odp_cos_with_l3_qos(odp_pktio_t pktio_in,
 			queue[i] = cos->s.queue;
 			retcode = fill_queue_configuration(queue[i], &cfg[i]);
 			if (retcode < 0) {
-				nadk_free(qos_value);
+				dpaa2_free(qos_value);
 				goto unlock_pmr_and_clean;
 			}
 
@@ -1042,38 +1201,38 @@ int odp_cos_with_l3_qos(odp_pktio_t pktio_in,
 			queue[i]->s.priv = dev->rx_vq[++flow_id];
 			/*TODO Need to update with variable value*/
 			cos->s.tc_id = ODP_CLS_DEFAULT_TC;
-			nadk_dev_set_vq_handle(dev->rx_vq[flow_id],
+			dpaa2_dev_set_vq_handle(dev->rx_vq[flow_id],
 					       (uint64_t)queue[i]->s.handle);
-			/*Update input and output nadk device in ODP queue*/
+			/*Update input and output dpaa2 device in ODP queue*/
 			queue[i]->s.pktin = pktio_in;
 			queue[i]->s.pktout = pktio_in;
 
 			if (flow_id < dev->num_rx_vqueues) {
-				retcode = nadk_eth_setup_rx_vq(dev, flow_id,
+				retcode = dpaa2_eth_setup_rx_vq(dev, flow_id,
 							       &cfg[i]);
 				if (retcode < 0) {
-					nadk_free(qos_value);
+					dpaa2_free(qos_value);
 					ODP_ERR("Error in setup Rx flow");
 					goto unlock_pmr_and_clean;
 				}
 			} else {
 				ODP_ERR("Number of flows reached at maximum limit\n");
-				nadk_free(qos_value);
+				dpaa2_free(qos_value);
 				goto unlock_pmr_and_clean;
 			}
 		} else {
 			ODP_ERR("NULL CoS entry found\n");
-			nadk_free(qos_value);
+			dpaa2_free(qos_value);
 			goto unlock_pmr_and_clean;
 		}
 
 		odp_configure_l3_prio_rule(entry, pmr[i]);
 		/*Update rule list*/
-		fs_rule = nadk_calloc(NULL, 1, sizeof(struct exact_match_rule),
+		fs_rule = dpaa2_calloc(NULL, 1, sizeof(struct exact_match_rule),
 				      0);
 		if (!fs_rule) {
 			ODP_ERR(" NO memory for DEVICE.\n");
-			nadk_free(qos_value);
+			dpaa2_free(qos_value);
 			goto unlock_pmr_and_clean;
 		}
 
@@ -1106,8 +1265,8 @@ unlock_pmr_and_clean:
 
 clean_allocated_resources:
 	for (j = 0; j < i; j++) {
-		nadk_data_free((void *)pmr[i]->s.rule.key_iova);
-		nadk_data_free((void *)pmr[i]->s.rule.mask_iova);
+		dpaa2_data_free((void *)pmr[i]->s.rule.key_iova);
+		dpaa2_data_free((void *)pmr[i]->s.rule.mask_iova);
 	}
 	/*Free allocated memory for L2 Shadow database*/
 	odp_delete_l3_rule_list(pktio_in);
@@ -1297,39 +1456,39 @@ odp_pmr_t odp_pmr_create(const odp_pmr_match_t *match)
 
 	pmr->s.num_pmr = 1;
 	/*Allocate memory for matching rule configuration at H/W.*/
-	params[0] = nadk_data_zmalloc(
+	params[0] = dpaa2_data_zmalloc(
 		NULL, DIST_PARAM_IOVA_SIZE, ODP_CACHE_LINE_SIZE);
 	if (!params[0]) {
 		ODP_ERR("Memory unavaialble");
 		return ODP_PMR_INVAL;
 	}
 	/*Allocate memory for mask rule at H/W.*/
-	params[1] = nadk_data_zmalloc(
+	params[1] = dpaa2_data_zmalloc(
 		NULL, DIST_PARAM_IOVA_SIZE, ODP_CACHE_LINE_SIZE);
 	if (!params[1]) {
 		ODP_ERR("Memory unavaialble");
-		nadk_data_free((void *)params[0]);
+		dpaa2_data_free((void *)params[0]);
 		return ODP_PMR_INVAL;
 	}
 	/* Allocate memory for mathcing rule provided by user. This memory will
 	   be freed once matching rule is configured at H/W.
 	*/
-	uargs[0] = nadk_calloc(NULL, 1, match->val_sz, ODP_CACHE_LINE_SIZE);
+	uargs[0] = dpaa2_calloc(NULL, 1, match->val_sz, ODP_CACHE_LINE_SIZE);
 	if (!uargs[0]) {
-		nadk_data_free((void *)params[0]);
-		nadk_data_free((void *)params[1]);
+		dpaa2_data_free((void *)params[0]);
+		dpaa2_data_free((void *)params[1]);
 		ODP_ERR("Memory unavaialble");
 		return ODP_PMR_INVAL;
 	}
 	/* Allocate memory for masking rule provided by user. This memory will
 	   be freed once matching rule is configured at H/W.
 	*/
-	uargs[1] = nadk_calloc(NULL, 1, match->val_sz, ODP_CACHE_LINE_SIZE);
+	uargs[1] = dpaa2_calloc(NULL, 1, match->val_sz, ODP_CACHE_LINE_SIZE);
 	if (!uargs[1]) {
 		ODP_ERR("Memory unavaialble");
-		nadk_data_free((void *)params[0]);
-		nadk_data_free((void *)params[1]);
-		nadk_free((void *)uargs[0]);
+		dpaa2_data_free((void *)params[0]);
+		dpaa2_data_free((void *)params[1]);
+		dpaa2_free((void *)uargs[0]);
 		return ODP_PMR_INVAL;
 	}
 
@@ -1376,12 +1535,12 @@ int odp_pmr_destroy(odp_pmr_t pmr_id)
 	pmr_index = loop - 1;
 
 	/*Free pre-allocated memory for PMR rule and mask*/
-	nadk_data_free((void *)(pmr->s.rule.key_iova));
-	nadk_data_free((void *)(pmr->s.rule.mask_iova));
+	dpaa2_data_free((void *)(pmr->s.rule.key_iova));
+	dpaa2_data_free((void *)(pmr->s.rule.mask_iova));
 	if (pmr->s.term_value[0].val)
-		nadk_free((void *)(pmr->s.term_value[0].val));
+		dpaa2_free((void *)(pmr->s.term_value[0].val));
 	if (pmr->s.term_value[0].mask)
-		nadk_free((void *)(pmr->s.term_value[0].mask));
+		dpaa2_free((void *)(pmr->s.term_value[0].mask));
 	pmr->s.rule.key_size = 0;
 	pmr->s.valid = 0;
 	pmr->s.num_pmr = 0;
@@ -1530,8 +1689,8 @@ void odp_update_pmr_set_offset(pktio_entry_t *pktio ODP_UNUSED,
 		mask = (uint8_t *)(pmr_set->s.rule.mask_iova + offset);
 		memcpy(stream, (void *)(pmr_set->s.term_value[j].val), pmr_info[i].size);
 		memcpy(mask, (void *)(pmr_set->s.term_value[j].mask), pmr_info[i].size);
-		nadk_free((void *)(pmr_set->s.term_value[j].val));
-		nadk_free((void *)(pmr_set->s.term_value[j].mask));
+		dpaa2_free((void *)(pmr_set->s.term_value[j].val));
+		dpaa2_free((void *)(pmr_set->s.term_value[j].mask));
 		pmr_set->s.term_value[j].val = (uint64_t)NULL;
 		pmr_set->s.term_value[j].mask = (uint64_t)NULL;
 	}
@@ -1572,9 +1731,9 @@ int odp_pktio_pmr_cos(odp_pmr_t pmr_id,
 	pmr_t			*pmr;
 	cos_t			*cos;
 	/*Platform specific objects and variables*/
-	struct nadk_vq_param	cfg;
-	struct nadk_dev		*dev;
-	struct nadk_dev_priv	*dev_priv;
+	struct dpaa2_vq_param	cfg;
+	struct dpaa2_dev		*dev;
+	struct dpaa2_dev_priv	*dev_priv;
 	struct fsl_mc_io	*dpni;
 	uint16_t		flow_id;
 	struct dpni_rx_tc_dist_cfg	*tc_cfg;
@@ -1598,7 +1757,7 @@ int odp_pktio_pmr_cos(odp_pmr_t pmr_id,
 		return -1;
 	}
 
-	dev = pktio->s.pkt_nadk.dev;
+	dev = pktio->s.pkt_dpaa2.dev;
 	dev_priv = dev->priv;
 	dpni = dev_priv->hw;
 	flow_id = pktio->s.cls.flow_id;
@@ -1644,14 +1803,14 @@ int odp_pktio_pmr_cos(odp_pmr_t pmr_id,
 
 	odp_update_pmr_offset(pktio, pmr);
 
-	nadk_dev_set_vq_handle(dev->rx_vq[flow_id], (uint64_t)queue->s.handle);
+	dpaa2_dev_set_vq_handle(dev->rx_vq[flow_id], (uint64_t)queue->s.handle);
 
-	/*Update input and output nadk device in ODP queue*/
+	/*Update input and output dpaa2 device in ODP queue*/
 	queue->s.pktin = src_pktio;
 	queue->s.pktout = src_pktio;
 
 	if (flow_id < dev->num_rx_vqueues) {
-		retcode = nadk_eth_setup_rx_vq(dev, flow_id, &cfg);
+		retcode = dpaa2_eth_setup_rx_vq(dev, flow_id, &cfg);
 		if (retcode < 0) {
 			ODP_ERR("Error in setup Rx flow");
 			return -1;
@@ -1662,7 +1821,7 @@ int odp_pktio_pmr_cos(odp_pmr_t pmr_id,
 	}
 
 	/*Update rule list*/
-	fs_rule = nadk_malloc(NULL, sizeof(struct exact_match_rule));
+	fs_rule = dpaa2_malloc(NULL, sizeof(struct exact_match_rule));
 	if (!fs_rule) {
 		ODP_ERR(" NO memory for DEVICE.\n");
 		return -1;
@@ -1684,11 +1843,11 @@ int odp_pktio_pmr_cos(odp_pmr_t pmr_id,
 	retcode = odp_offload_rules(src_pktio);
 	if (retcode < 0) {
 		ODP_ERR("Error in adding FS entry:Error Code = %d\n", retcode);
-		nadk_free((void *)fs_rule);
+		dpaa2_free((void *)fs_rule);
 		return -1;
 	}
-	nadk_free((void *)(pmr->s.term_value[0].val));
-	nadk_free((void *)(pmr->s.term_value[0].mask));
+	dpaa2_free((void *)(pmr->s.term_value[0].val));
+	dpaa2_free((void *)(pmr->s.term_value[0].mask));
 	pmr->s.term_value[0].val = (uint64_t)NULL;
 	pmr->s.term_value[0].mask = (uint64_t)NULL;
 	pktio->s.cls.flow_id = flow_id;
@@ -1746,17 +1905,17 @@ int odp_pmr_match_set_create(int num_terms, const odp_pmr_match_t *terms,
 		return -1;
 	}
 	/*Allocate memory for matching rule configuration at H/W */
-	params[0] = nadk_data_zmalloc(
+	params[0] = dpaa2_data_zmalloc(
 		NULL, DIST_PARAM_IOVA_SIZE, ODP_CACHE_LINE_SIZE);
 	if (!params[0]) {
 		ODP_ERR("Memory unavaialble");
 		return -1;
 	}
-	params[1] = nadk_data_zmalloc(
+	params[1] = dpaa2_data_zmalloc(
 		NULL, DIST_PARAM_IOVA_SIZE, ODP_CACHE_LINE_SIZE);
 	if (!params[1]) {
 		ODP_ERR("Memory unavaialble");
-		nadk_data_free((void *)params[0]);
+		dpaa2_data_free((void *)params[0]);
 		return -1;
 	}
 
@@ -1766,19 +1925,19 @@ int odp_pmr_match_set_create(int num_terms, const odp_pmr_match_t *terms,
 		val_sz = terms[i].val_sz;
 		if (val_sz > ODP_PMR_TERM_BYTES_MAX)
 			continue;
-		args[0] = nadk_calloc(NULL, 1, val_sz, ODP_CACHE_LINE_SIZE);
+		args[0] = dpaa2_calloc(NULL, 1, val_sz, ODP_CACHE_LINE_SIZE);
 		if (!args[0]) {
 			ODP_ERR("Memory unavaialble");
-			nadk_data_free((void *)params[0]);
-			nadk_data_free((void *)params[1]);
+			dpaa2_data_free((void *)params[0]);
+			dpaa2_data_free((void *)params[1]);
 			return -1;
 		}
-		args[1] = nadk_calloc(NULL, 1, val_sz, ODP_CACHE_LINE_SIZE);
+		args[1] = dpaa2_calloc(NULL, 1, val_sz, ODP_CACHE_LINE_SIZE);
 		if (!args[1]) {
 			ODP_ERR("Memory unavaialble");
-			nadk_data_free((void *)params[0]);
-			nadk_data_free((void *)params[1]);
-			nadk_free((void *)(args[0]));
+			dpaa2_data_free((void *)params[0]);
+			dpaa2_data_free((void *)params[1]);
+			dpaa2_free((void *)(args[0]));
 			return -1;
 		}
 		pmr->s.term_value[i].term = terms[i].term;
@@ -1826,12 +1985,12 @@ int odp_pmr_match_set_destroy(odp_pmr_set_t pmr_set_id)
 	}
 	for (i = 0; i < pmr->s.num_pmr; i++) {
 		if (pmr->s.term_value[i].val)
-			nadk_free((void *)(pmr->s.term_value[i].val));
+			dpaa2_free((void *)(pmr->s.term_value[i].val));
 		if (pmr->s.term_value[i].mask)
-			nadk_free((void *)(pmr->s.term_value[i].mask));
+			dpaa2_free((void *)(pmr->s.term_value[i].mask));
 	}
-	nadk_data_free((void *)(pmr->s.rule.key_iova));
-	nadk_data_free((void *)(pmr->s.rule.mask_iova));
+	dpaa2_data_free((void *)(pmr->s.rule.key_iova));
+	dpaa2_data_free((void *)(pmr->s.rule.mask_iova));
 	pmr->s.rule.key_size = 0;
 	pmr->s.valid = 0;
 	pmr->s.num_pmr = 0;
@@ -1848,9 +2007,9 @@ int odp_pktio_pmr_match_set_cos(odp_pmr_set_t pmr_set_id, odp_pktio_t src_pktio,
 	pmr_set_t		*pmr;
 	cos_t			*cos;
 	/*Platform specific objects and variables*/
-	struct nadk_vq_param	cfg;
-	struct nadk_dev		*dev;
-	struct nadk_dev_priv	*dev_priv;
+	struct dpaa2_vq_param	cfg;
+	struct dpaa2_dev		*dev;
+	struct dpaa2_dev_priv	*dev_priv;
 	struct fsl_mc_io	*dpni;
 	uint16_t		flow_id;
 	struct dpni_rx_tc_dist_cfg	*tc_cfg;
@@ -1875,7 +2034,7 @@ int odp_pktio_pmr_match_set_cos(odp_pmr_set_t pmr_set_id, odp_pktio_t src_pktio,
 	}
 
 	/*Get H/W device information first*/
-	dev = pktio->s.pkt_nadk.dev;
+	dev = pktio->s.pkt_dpaa2.dev;
 	dev_priv = dev->priv;
 	dpni = dev_priv->hw;
 	flow_id = pktio->s.cls.flow_id;
@@ -1913,12 +2072,12 @@ int odp_pktio_pmr_match_set_cos(odp_pmr_set_t pmr_set_id, odp_pktio_t src_pktio,
 	/*TODO Need to update with variable value*/
 	cos->s.tc_id = ODP_CLS_DEFAULT_TC;
 	odp_update_pmr_set_offset(pktio, pmr);
-	nadk_dev_set_vq_handle(dev->rx_vq[flow_id], (uint64_t)queue->s.handle);
+	dpaa2_dev_set_vq_handle(dev->rx_vq[flow_id], (uint64_t)queue->s.handle);
 	queue->s.pktin = src_pktio;
 	queue->s.pktout = src_pktio;
 
 	if (flow_id < dev->num_rx_vqueues) {
-		retcode = nadk_eth_setup_rx_vq(dev, flow_id, &cfg);
+		retcode = dpaa2_eth_setup_rx_vq(dev, flow_id, &cfg);
 		if (retcode < 0) {
 			ODP_ERR("Error in setup Rx flow");
 			return -1;
@@ -1929,7 +2088,7 @@ int odp_pktio_pmr_match_set_cos(odp_pmr_set_t pmr_set_id, odp_pktio_t src_pktio,
 	}
 
 	/*Update rule list*/
-	fs_rule = nadk_malloc(NULL, sizeof(struct exact_match_rule));
+	fs_rule = dpaa2_malloc(NULL, sizeof(struct exact_match_rule));
 	if (!fs_rule) {
 		ODP_ERR("NO memory for DEVICE.\n");
 		return -1;
@@ -1950,14 +2109,14 @@ int odp_pktio_pmr_match_set_cos(odp_pmr_set_t pmr_set_id, odp_pktio_t src_pktio,
 	retcode = odp_offload_rules(src_pktio);
 	if (retcode < 0) {
 		ODP_ERR("Error in adding FS entry:Error Code = %d\n", retcode);
-		nadk_free((void *)fs_rule);
+		dpaa2_free((void *)fs_rule);
 		return -1;
 	}
 
 	/*Free user allocated pmr set memory*/
 	for (i = 0; i < pmr->s.num_pmr; i++) {
-		nadk_free((void *)(pmr->s.term_value[i].val));
-		nadk_free((void *)(pmr->s.term_value[i].mask));
+		dpaa2_free((void *)(pmr->s.term_value[i].val));
+		dpaa2_free((void *)(pmr->s.term_value[i].mask));
 		pmr->s.term_value[i].val = (uint64_t)NULL;
 		pmr->s.term_value[i].mask = (uint64_t)NULL;
 	}
@@ -1997,17 +2156,17 @@ int pktio_classifier_init(pktio_entry_t *entry)
 	cls->headroom = 0;
 	cls->skip = 0;
 
-	param = nadk_data_zmalloc(NULL, DIST_PARAM_IOVA_SIZE,
+	param = dpaa2_data_zmalloc(NULL, DIST_PARAM_IOVA_SIZE,
 						ODP_CACHE_LINE_SIZE);
 	if (!param) {
 		ODP_ERR("Memory unavaialble");
 		return -ENOMEM;
 	}
-	key_cfg = nadk_data_zmalloc(NULL, sizeof(struct dpkg_profile_cfg),
+	key_cfg = dpaa2_data_zmalloc(NULL, sizeof(struct dpkg_profile_cfg),
 						ODP_CACHE_LINE_SIZE);
 	if (!key_cfg) {
 		ODP_ERR("Memory unavaialble");
-		nadk_data_free((void *)param);
+		dpaa2_data_free((void *)param);
 		return -ENOMEM;
 	}
 	cls->l3_precedence = 0;

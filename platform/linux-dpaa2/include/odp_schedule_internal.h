@@ -30,7 +30,7 @@ int32_t odp_add_queue_to_group(odp_schedule_group_t grp);
 
 int32_t odp_sub_queue_to_group(odp_schedule_group_t grp);
 
-struct nadk_dev *odp_get_conc_from_grp(odp_schedule_group_t grp);
+struct dpaa2_dev *odp_get_conc_from_grp(odp_schedule_group_t grp);
 
 int32_t odp_affine_group(odp_schedule_group_t group, const odp_thrmask_t *msk);
 
@@ -40,7 +40,7 @@ void odp_schedule_release_context(void);
 
 extern odpfsl_dq_schedule_mode_t dq_schedule_mode;
 
-typedef int32_t (*odp_sch_recv_t)(nadk_mbuf_pt mbuf[], int num);
+typedef int32_t (*odp_sch_recv_t)(dpaa2_mbuf_pt mbuf[], int num);
 
 
 #ifdef __cplusplus

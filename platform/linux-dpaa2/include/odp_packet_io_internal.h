@@ -22,7 +22,7 @@ extern "C" {
 #endif
 
 #include <odp/spinlock.h>
-#include <odp_packet_nadk.h>
+#include <odp_packet_dpaa2.h>
 #include <odp_classification_datamodel.h>
 #include <odp_align_internal.h>
 
@@ -46,7 +46,7 @@ struct pktio_entry {
 	odp_queue_t outq_default;	/**< default out queue */
 	odp_queue_t loopq;		/**< loopback queue for "loop" device */
 	odp_pktio_type_t type;		/**< pktio type */
-	pkt_nadk_t pkt_nadk;		/**< using NADK API for IO */
+	pkt_dpaa2_t pkt_dpaa2;		/**< using DPAA2 API for IO */
 	odp_bool_t cls_init_done;	/**< Classifier is initialized or not ?*/
 	classifier_t cls;		/**< classifier linked with this pktio*/
 	char name[IFNAMSIZ];		/**< name of pktio provided to

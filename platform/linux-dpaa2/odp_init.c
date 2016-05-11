@@ -9,7 +9,7 @@
 #include <odp_internal.h>
 #include <odp/debug.h>
 #include <odp_debug_internal.h>
-#include <odp_packet_nadk.h>
+#include <odp_packet_dpaa2.h>
 #include <odp/thread.h>
 #include <odp_packet_internal.h>
 #include <odp/cpu.h>
@@ -26,20 +26,21 @@
 #include <stdbool.h>
 #include <pthread.h>
 
-#include <nadk.h>
+#include <dpaa2.h>
 #include <odp/std_types.h>
-#include <nadk_common.h>
-#include <nadk_dev.h>
-#include <nadk_mbuf.h>
-#include <nadk_io_portal_priv.h>
+#include <dpaa2_common.h>
+#include <dpaa2_dev.h>
+#include <dpaa2_mbuf.h>
+#include <dpaa2_io_portal_priv.h>
+#include <dpaa2_eth_priv.h>
 
 struct odp_global_data_s odp_global_data;
-struct nadk_resources nadk_res;
+struct dpaa2_resources dpaa2_res;
 /* Global Lock for calling MC FLIB APIs */
 odpfsl_dq_schedule_mode_t dq_schedule_mode = ODPFSL_PUSH;
 
 #define MAX_CPU		8
-#define NADK_DEFAULT_DATA_MEM_SIZE	(32 * 1024 * 1024)	/*32 MB*/
+#define DPAA2_DEFAULT_DATA_MEM_SIZE	(32 * 1024 * 1024)	/*32 MB*/
 
 
 struct dpio_user {
@@ -49,7 +50,7 @@ struct dpio_user {
 struct dpio_user control_dpio[ODPFSL_MAX_PLATFORM_CORE];
 
 /*TODO after testing signal handler.*/
-/*atomic32_t received_sigint = NADK_ATOMIC32_INIT(0);*/
+/*atomic32_t received_sigint = DPAA2_ATOMIC32_INIT(0);*/
 int received_sigint;
 /*Variable to check ODP intialization*/
 static int odp_init = FALSE;
@@ -146,43 +147,42 @@ static void __attribute__((destructor(102))) odp_finish(void)
 	if (!vfio_container)
 		return;
 	if (odp_term_global())
-		NADK_ERR(APP1, "Error: ODP Global term failed.\n");
+		DPAA2_ERR(APP1, "Error: ODP Global term failed.\n");
 	/*Clear buffer library*/
-	nadk_mbuf_finish();
+	dpaa2_mbuf_finish();
 	/*Graceful shutdown to all the Ethernet devices*/
-	for (i = 0; i < nadk_res.res_cnt.eth_dev_cnt; i++) {
-		nadk_dev_stop(nadk_res.net_dev[i]);
-		nadk_dev_shutdown(nadk_res.net_dev[i]);
+	for (i = 0; i < dpaa2_res.res_cnt.eth_dev_cnt; i++) {
+		dpaa2_eth_stop(dpaa2_res.net_dev[i]);
 	}
 	/* Do cleanup and exit */
-	nadk_cleanup();
+	dpaa2_cleanup();
 }
 
-struct nadk_dev *odp_get_nadk_eth_dev(const char *dev_name)
+struct dpaa2_dev *odp_get_dpaa2_eth_dev(const char *dev_name)
 {
 	uint32_t i;
 
-	for (i = 0; i < nadk_res.res_cnt.eth_dev_cnt; i++) {
-		if (!(strcmp(nadk_res.net_dev[i]->dev_string, dev_name)))
-			return nadk_res.net_dev[i];
+	for (i = 0; i < dpaa2_res.res_cnt.eth_dev_cnt; i++) {
+		if (!(strcmp(dpaa2_res.net_dev[i]->dev_string, dev_name)))
+			return dpaa2_res.net_dev[i];
 	}
 	return NULL;
 }
 
-struct nadk_dev *odp_get_inactive_conc_dev(void)
+struct dpaa2_dev *odp_get_inactive_conc_dev(void)
 {
 	uint32_t i = 0;
 
-	for (i = 0; i < nadk_res.res_cnt.conc_dev_cnt; i++) {
-		if (nadk_res.conc_dev[i]->state == DEV_INACTIVE)
-			return nadk_res.conc_dev[i];
+	for (i = 0; i < dpaa2_res.res_cnt.conc_dev_cnt; i++) {
+		if (dpaa2_res.conc_dev[i]->state == DEV_INACTIVE)
+			return dpaa2_res.conc_dev[i];
 	}
 	return NULL;
 }
 
-int32_t odp_nadk_scan_device_list(uint32_t dev_type)
+int32_t odp_dpaa2_scan_device_list(uint32_t dev_type)
 {
-	struct nadk_dev *dev;
+	struct dpaa2_dev *dev;
 	int32_t dev_found = 0;
 
 	/* Get List of devices assigned to me */
@@ -190,28 +190,28 @@ int32_t odp_nadk_scan_device_list(uint32_t dev_type)
 		if (dev_type != dev->dev_type)
 			continue;
 
-		NADK_NOTE(APP1, "%s being created", dev->dev_string);
+		DPAA2_NOTE(APP1, "%s being created", dev->dev_string);
 		dev_found = 1;
 		switch (dev->dev_type) {
-		case NADK_NIC:
-			nadk_res.net_dev[nadk_res.res_cnt.eth_dev_cnt++] = dev;
+		case DPAA2_NIC:
+			dpaa2_res.net_dev[dpaa2_res.res_cnt.eth_dev_cnt++] = dev;
 			break;
-		case NADK_CONC:
-			nadk_res.conc_dev[nadk_res.res_cnt.conc_dev_cnt++] =
+		case DPAA2_CONC:
+			dpaa2_res.conc_dev[dpaa2_res.res_cnt.conc_dev_cnt++] =
 									dev;
 			break;
-		case NADK_AIOP_CI:
-			nadk_res.ci_dev[nadk_res.res_cnt.ci_dev_cnt++] =
+		case DPAA2_AIOP_CI:
+			dpaa2_res.ci_dev[dpaa2_res.res_cnt.ci_dev_cnt++] =
 									dev;
 			break;
-		case NADK_SEC:
-		case NADK_PME:
-		case NADK_DCE:
-		case NADK_SW:
-		case NADK_IO_CNTXT:
+		case DPAA2_SEC:
+		case DPAA2_PME:
+		case DPAA2_DCE:
+		case DPAA2_SW:
+		case DPAA2_IO_CNTXT:
 			ODP_UNIMPLEMENTED();
 			break;
-		case NADK_MAX_DEV:
+		case DPAA2_MAX_DEV:
 			ODP_DBG("Maximum limit reached for device\n");
 			break;
 		}
@@ -222,12 +222,12 @@ int32_t odp_nadk_scan_device_list(uint32_t dev_type)
 /*
  * Function to initalize all the Ethernet devices.
  */
-static int odp_nadk_init_global(const odp_platform_init_t *platform_params)
+static int odp_dpaa2_init_global(const odp_platform_init_t *platform_params)
 {
-	struct nadk_init_cfg cfg;
+	struct dpaa2_init_cfg cfg;
 
 	install_signal_handler();
-	memset(&cfg, 0, sizeof(struct nadk_init_cfg));
+	memset(&cfg, 0, sizeof(struct dpaa2_init_cfg));
 	vfio_container = getenv("DPRC");
 	if (vfio_container == NULL) {
 		ODP_ERR("\n\nEnviroment varialble DPRC is not set\n\n");
@@ -238,39 +238,39 @@ static int odp_nadk_init_global(const odp_platform_init_t *platform_params)
 	if (platform_params && platform_params->data_mem_size)
 		cfg.data_mem_size = platform_params->data_mem_size;
 	else
-		cfg.data_mem_size = NADK_DEFAULT_DATA_MEM_SIZE;
+		cfg.data_mem_size = DPAA2_DEFAULT_DATA_MEM_SIZE;
 	cfg.buf_mem_size	= 0;
-	cfg.log_level		= NADK_LOG_WARNING;
-	cfg.flags		= NADK_SOFTQ_SUPPORT;
+	cfg.log_level		= DPAA2_LOG_WARNING;
+	cfg.flags		= DPAA2_SOFTQ_SUPPORT;
 
-	/* Till now NADK framework is not initialized so that cannot use NADK
-	 * logging mechanism. NADK logging will be usable after nadk_init.
+	/* Till now DPAA2 framework is not initialized so that cannot use DPAA2
+	 * logging mechanism. DPAA2 logging will be usable after dpaa2_init.
 	 */
-	printf("Initializing NADK framework with following parameters:\n");
+	printf("Initializing DPAA2 framework with following parameters:\n");
 	printf("\tResource container :%s\n", cfg.vfio_container);
 	printf("\tData Memory size:0x%p\n", (void *)cfg.data_mem_size);
 	printf("\tLog_level:%d\n", cfg.log_level);
 	printf("\tFlags:0x%0x\n", cfg.flags);
 
-	if (nadk_init(&cfg) < 0) {
-		ODP_ERR("nadk_init failed\n");
+	if (dpaa2_init(&cfg) < 0) {
+		ODP_ERR("dpaa2_init failed\n");
 		return -1;
 	}
 
 
 	/* Get Total available I/O contexts. We are required atleast 1 I/O
 	context*/
-	memset(&nadk_res, 0, sizeof(struct nadk_resources));
-	nadk_res.res_cnt.io_context_cnt = nadk_get_io_context_count();
-	if (nadk_res.res_cnt.io_context_cnt == 0) {
+	memset(&dpaa2_res, 0, sizeof(struct dpaa2_resources));
+	dpaa2_res.res_cnt.io_context_cnt = dpaa2_get_io_context_count();
+	if (dpaa2_res.res_cnt.io_context_cnt == 0) {
 		ODP_ERR("Not enough Resource to run\n");
-		goto nadk_failure;
+		goto dpaa2_failure;
 	}
 
-	return NADK_SUCCESS;
-nadk_failure:
-	nadk_cleanup();
-	return NADK_FAILURE;
+	return DPAA2_SUCCESS;
+dpaa2_failure:
+	dpaa2_cleanup();
+	return DPAA2_FAILURE;
 }
 
 /*
@@ -318,8 +318,8 @@ int odp_init_global(const odp_init_t *params,
 	odp_system_info_init();
 	odp_data_init_global();
 
-	if (odp_nadk_init_global(platform_params)) {
-		ODP_ERR("ODP nadk init failed.\n");
+	if (odp_dpaa2_init_global(platform_params)) {
+		ODP_ERR("ODP dpaa2 init failed.\n");
 		return -1;
 	}
 
@@ -456,9 +456,9 @@ int odp_init_local(odp_thread_type_t thr_type)
 		}
 	}
 
-	ret = nadk_thread_affine_io_context(NADK_IO_PORTAL_ANY_FREE);
+	ret = dpaa2_thread_affine_io_context(DPAA2_IO_PORTAL_ANY_FREE);
 	if (ret) {
-		ODP_ERR("nadk_thread_affine_io_context failed.\n");
+		ODP_ERR("dpaa2_thread_affine_io_context failed.\n");
 		return -1;
 	}
 
@@ -506,7 +506,7 @@ int odp_term_local(void)
 		control_dpio[odp_cpu_id()].dpio_dev = NULL;
 	}
 
-	nadk_thread_deaffine_io_context();
+	dpaa2_thread_deaffine_io_context();
 
 skip_portal_deaffine:
 	rc_thd = odp_thread_term_local();

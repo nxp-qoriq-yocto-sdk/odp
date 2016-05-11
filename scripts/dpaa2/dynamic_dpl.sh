@@ -73,28 +73,74 @@ script help :----->
 	This script will create 4 DPBP, 10 DPIOs, 10 DPCIs, 1 DPCON, 1 DPSEC
 	and DPNIs depend upon the arguments given during command line.
 
-EOF
+     Optional configuration parameters:
 
-#/* getting the objects parameters values from the "ENVIRONMENT VARIABLES"
-#/* **DPNI**:-->
-#/* MAX_SENDERS		= max number of different senders
-#/* MAX_TCS		= maximum traffic classes
-#/* MAX_DIST_PER_TC	= maximum distribution'size per RX traffic class
-#/* DPNI_OPTIONS	= DPNI related options must be like "DPNI_OPT_MULTICAST_FILTER,DPNI_OPT_UNICAST_FILTER,DPNI_OPT_DIST_HASH" string.
-#/* MAX_DIST_KEY_SIZE	= maximum distribution key size
-#/*
-#/* **DPCON**:-->
-#/* DPCON_PRIORITIES	= Number of priorities 1-8
-#/*
-#/* **DPSECI**:-->
-#/* DPSECI_QUEUES	= Number of rx/tx queues
-#/* DPSECI_PRIORITIES	= num-queues priorities that can be individually set like "2,2,2.."
-#/*
-#/* **DPIO**:-->
-#/* DPIO_PRIORITIES	= defines priority from 1-8
-#/*
-#/*
-#*/
+	Below "ENVIRONMENT VARIABLES" are exported to get user defined
+	configuration"
+	/**DPNI**:-->
+		MAX_SENDERS         = max number of parallel senders on DPNI.
+					Set the parameter using below command:
+					'export MAX_SENDERS=<Number of senders>'
+					where "Number of senders" is an integer
+					value "e.g export MAX_SENDERS=8"
+
+		MAX_TCS             = maximum traffic classes for Rx/Tx both.
+					Set the parameter using below command:
+					'export MAX_TCS=<Num of traffic class>'
+					where "Number of traffic classes" is an
+					integer value. "e.g export MAX_TCS=8"
+
+		MAX_DIST_PER_TC     = maximum dist 'size per RX traffic class.
+					Set the parameter using below command:
+					'export MAX_DIST_PER_TC="dist_in_tc1,dist_in_tc2,..."'
+					export MAX_DIST_PER_TC="8,8,8,8,8,8,8,8"
+					to set 4 distribution in each TC
+					Distribution values occurrence must be
+					equal to number of MAX_TCS.
+				Note: Make sure to modify MAX_DIST_PER_TC if
+					MAX_TCS is modified.
+
+		DPNI_OPTIONS        = DPNI related options.
+					Set the parameter using below command:
+					'export DPNI_OPTIONS="opt-1,opt-2,..."'
+					e.g export DPNI_OPTIONS="DPNI_OPT_MULTICAST_FILTER,DPNI_OPT_UNICAST_FILTER,DPNI_OPT_DIST_HASH,DPNI_OPT_DIST_FS,DPNI_OPT_FS_MASK_SUPPORT"
+
+		MAX_DIST_KEY_SIZE   = maximum distribution key size.
+					Set the parameter using below command:
+					'export MAX_DIST_KEY_SIZE=<Key length>
+					 where "key length" is an integer value.
+					 e.g. export MAX_DIST_KEY_SIZE=32
+
+	/**DPCON**:-->
+		DPCON_PRIORITIES    = number of priorities 1-8.
+					Set the parameter using below command:
+					'export DPCON_PRIORITIES=<Num of prio>'
+					where "Number of priorities" is an
+					integer value.
+					e.g export DPCON_PRIORITIES=8."
+
+
+	/**DPSECI**:-->
+		DPSECI_QUEUES       = number of rx/tx queues.
+					Set the parameter using below command:
+					'export DPSECI_QUEUES=<Num of Queues>'
+					where "Number of Queues" is an integer
+					value "e.g export DPSECI_QUEUES=8".
+
+		DPSECI_PRIORITIES   = num-queues priorities.
+					Set the parameter using below command:
+                                        'export DPSECI_PRIORITIES="Prio-1,Prio-2,..."'
+                                        e.g export DPSECI_PRIORITIES="2,2,2,2,2,2,2,2"
+
+	/**DPIO**:-->
+		DPIO_PRIORITIES     = number of  priority from 1-8.
+					Set the parameter using below command:
+                                        'export DPIO_PRIORITIES=<Num of prio>'
+					where "Number of priorities" is an
+					integer value.
+					"e.g export DPIO_PRIORITIES=8"
+
+EOF
 
 
 #/* Function, to intialize the DPNI related parameters
@@ -590,7 +636,7 @@ then
 	        echo "#1)    Allow unsafe interrupts"
 	        echo 1 > /sys/module/vfio_iommu_type1/parameters/allow_unsafe_interrupts
 	else
-	        echo -e $RED" Can't Run NADK without VFIO support"$NC
+	        echo -e $RED" Can't Run DPAA2 without VFIO support"$NC
 		[[ "${BASH_SOURCE[0]}" != $0 ]] && return || exit
 	fi
 	if [ -e $DPRC_LOC ];

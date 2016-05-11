@@ -128,7 +128,7 @@ odpfsl_knidev_t odpfsl_knidev_alloc(int32_t port_id);
 /**
  * Releasing an allocated kni_device
  *
- * For a given kni_device, nadk_kni_release is called to shutdown and release
+ * For a given kni_device, odpfsl_kni_release is called to shutdown and release
  * it.
  *
  * @param [in] kdev odpfsl_knidev_t type device
@@ -226,7 +226,7 @@ void odpfsl_knidev_get_stat_tx(odpfsl_knidev_t kdev, uint64_t *tx_packets,\
  *
  * Caller would pass an array of packets received from ODP, which this function
  * would convert into appropriate kni_mbuf packets and send over the KNI
- * interface using the nadk_kni_tx_burst
+ * interface using the odpfsl_kni_tx_burst
  *
  * @param [in] kdev odpfsl_knidev_t type device identifier
  * @param [in] id KNI port ID
@@ -242,7 +242,7 @@ unsigned odpfsl_kni_tx(odpfsl_knidev_t kdev, int id, \
 /**
  * Interface to receive packets from KNI and convert into ODP packets
  *
- * Packets are received from KNI device using nadk_kni_rx_burst in kni_mbuf
+ * Packets are received from KNI device using odpfsl_kni_rx_burst in kni_mbuf
  * form and converted into odp_packet_t to be sent to ODP interface by caller
  * The caller needs to pass an array, in which ODP packets would be allocated
  * by this function. Maximum size of array limits the number of packets which
@@ -268,13 +268,13 @@ unsigned odpfsl_kni_rx(odpfsl_knidev_t kdev, int id, \
  * KNI devices support operations like change of MTU, change of state,
  * promiscuity etc. This function allows the caller to provide CPU cycles for
  * parsing such requests and calling corresponding callback functions.
- * This is essentially a wrapper around nadk_kni_handle_request API
+ * This is essentially a wrapper around odpfsl_kni_handle_request API
  *
  * @param [in] kdev odpfsl_knidev_t type device
  * @param [in] port_id KNI port
  * @return
  *      0 for Success
- *     !0 for Failure (as returned by nadk_kni_handle_request
+ *     !0 for Failure (as returned by odpfsl_kni_handle_request
  */
 int odpfsl_kni_handle_events(odpfsl_knidev_t kdev, int32_t port_id);
 

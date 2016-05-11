@@ -4,16 +4,17 @@
  * SPDX-License-Identifier:     BSD-3-Clause
  */
 
-#include <nadk_dev.h>
-#include <nadk/aiop/nadk_aiop.h>
+#include <dpaa2_dev.h>
+#include <odp/plat/sdk/aiop/dpaa2_aiop.h>
 #include <odp_debug_internal.h>
 #include <odp/plat/cmdif/odpfsl_cidev.h>
 #include <odp_internal.h>
+#include <dpaa2_aiop_priv.h>
 
 int odpfsl_ci_init_global(void)
 {
 	/*Scan the device list for CI devices*/
-	odp_nadk_scan_device_list(NADK_AIOP_CI);
+	odp_dpaa2_scan_device_list(DPAA2_AIOP_CI);
 
 	return 0;
 }
@@ -23,22 +24,20 @@ int odpfsl_ci_term_global(void)
 	uint32_t i;
 
 	/*Graceful shutdown to all the CI devices*/
-	for (i = 0; i < nadk_res.res_cnt.ci_dev_cnt; i++) {
-		nadk_dev_stop(nadk_res.ci_dev[i]);
-		nadk_dev_shutdown(nadk_res.ci_dev[i]);
-	}
+	for (i = 0; i < dpaa2_res.res_cnt.ci_dev_cnt; i++)
+		dpaa2_aiop_stop(dpaa2_res.ci_dev[i]);
 
 	return 0;
 }
 
 void *odpfsl_cidev_open(void)
 {
-	struct nadk_dev *dev = NULL;
+	struct dpaa2_dev *dev = NULL;
 	uint32_t i;
 	int ret;
 
-	for (i = 0; i < nadk_res.res_cnt.ci_dev_cnt; i++) {
-		dev = nadk_res.ci_dev[i];
+	for (i = 0; i < dpaa2_res.res_cnt.ci_dev_cnt; i++) {
+		dev = dpaa2_res.ci_dev[i];
 		if (dev->state == DEV_INACTIVE)
 			break;
 	}
@@ -56,16 +55,16 @@ void *odpfsl_cidev_open(void)
 
 	/* Setup the Rx VQ's */
 	for (i = 0; i < dev->num_rx_vqueues; i++) {
-		ret = nadk_dev_setup_rx_vq(dev, i, NULL);
-		if (ret != NADK_SUCCESS) {
+		ret = dpaa2_aiop_setup_rx_vq(dev, i, NULL);
+		if (ret != DPAA2_SUCCESS) {
 			ODP_ERR("Unable to setup the RX queue\n");
 			return NULL;
 		}
 	}
 
 	/* Enable the device */
-	ret = nadk_dev_start(dev);
-	if (ret != NADK_SUCCESS) {
+	ret = dpaa2_aiop_start(dev);
+	if (ret != DPAA2_SUCCESS) {
 		ODP_ERR("CI device start failure\n");
 		return NULL;
 	}
