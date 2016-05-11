@@ -14,3 +14,7 @@ include $(top_srcdir)/aminclude.am
 
 EXTRA_DIST = bootstrap $(DX_CONFIG) config/README
 #nobase_dist_pkgdata_DATA = $(top_srcdir)/kern/odpfsl_kni.ko
+
+customdir=${exec_prefix}/odp/scripts
+dist_custom_SCRIPTS = \
+	$(top_srcdir)/scripts/dpaa2/*

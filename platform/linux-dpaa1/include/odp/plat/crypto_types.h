@@ -54,7 +54,7 @@ enum  odp_cipher_alg {
 	ODP_CIPHER_ALG_NULL,	 /**< No cipher algorithm specified */
 	ODP_CIPHER_ALG_DES,	 /**< DES */
 	ODP_CIPHER_ALG_3DES_CBC, /**< Triple DES with cipher block chaining */
-	ODP_CIPHER_ALG_AES_CBC,  /**< AES with cipher block chaining */
+	ODP_CIPHER_ALG_AES128_CBC,  /**< AES with cipher block chaining */
 };
 
 /**

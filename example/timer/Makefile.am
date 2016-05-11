@@ -1,5 +1,6 @@
 include $(top_srcdir)/example/Makefile.inc
 
+bindir=${exec_prefix}/odp/bin
 bin_PROGRAMS = odp_timer_test$(EXEEXT)
 odp_timer_test_LDFLAGS = $(AM_LDFLAGS) -static
 odp_timer_test_CFLAGS = $(AM_CFLAGS) -I${top_srcdir}/example

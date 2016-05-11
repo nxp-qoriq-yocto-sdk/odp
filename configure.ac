@@ -365,8 +365,11 @@ AC_CONFIG_FILES([Makefile
 		 example/classifier/Makefile
 		 example/generator/Makefile
 		 example/ipsec/Makefile
+		 example/ipsec_proto/Makefile
 		 example/packet/Makefile
 		 example/timer/Makefile
+		 example/reflector/Makefile
+		 example/l3fwd/Makefile
 		 helper/Makefile
 		 helper/test/Makefile
 		 pkgconfig/libodp.pc
@@ -399,6 +402,9 @@ AC_CONFIG_FILES([Makefile
 		 test/validation/system/Makefile
 		 test/miscellaneous/Makefile
 		 ])
+AM_COND_IF([BUILD_DPAA2], [AC_CONFIG_FILES([example/kni_demo/Makefile
+		 example/cmdif_demo/Makefile
+		])])
 
 AC_SEARCH_LIBS([timer_create],[rt posix4])
 

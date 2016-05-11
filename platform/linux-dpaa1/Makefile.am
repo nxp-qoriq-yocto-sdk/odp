@@ -250,3 +250,11 @@ EXTRA_DIST = \
 		arch/linux/odp_cpu_cycles.c \
 		arch/mips64/odp_time_cycles.c \
 		arch/x86/odp_time_cycles.c
+
+customscriptsdir=${exec_prefix}/odp/scripts
+dist_customscripts_SCRIPTS = \
+	$(top_srcdir)/platform/linux-dpaa1/scripts/*
+
+custompcddir=${exec_prefix}/odp/pcd
+dist_custompcd_SCRIPTS = \
+	$(top_srcdir)/platform/linux-dpaa1/pcd/*
