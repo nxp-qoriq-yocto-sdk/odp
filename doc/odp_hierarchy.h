@@ -98,18 +98,6 @@
 		@ingroup ODP_MODULES
 	*/
 
-	/** @defgroup odpfsl_data_malloc ODPFSL DATA MALLOC
-		@ingroup ODP_MODULES
-	*/
-
-	/** @defgroup odpfsl_kni ODPFSL KNI
-		@ingroup ODP_MODULES
-	*/
-
-	/** @defgroup odpfsl_cmdif ODPFSL CMDIF
-		@ingroup ODP_MODULES
-	*/
-
 	/** @defgroup odph_header ODPH HEADER
 		@ingroup ODP_MODULES
 	*/
