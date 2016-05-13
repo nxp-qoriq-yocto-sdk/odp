@@ -41,11 +41,11 @@
 #include <fsl_dpni_cmd.h>
 #include <fsl_mc_sys.h>
 
+/* Actual mapped loopback device */
+char loop_device[10];
 
-/* MTU to be reported for the "loop" interface */
-#define PKTIO_LOOP_MTU 1500
-/* MAC address for the "loop" interface */
-static const char pktio_loop_mac[] = {0x02, 0xe9, 0x34, 0x80, 0x73, 0x01};
+/* VFIO container */
+char container[8];
 
 static pktio_table_t *pktio_tbl;
 
@@ -215,7 +215,6 @@ static int free_pktio_entry(odp_pktio_t id)
 	return 0;
 }
 
-#if 0
 static int init_loop(pktio_entry_t *entry, odp_pktio_t id)
 {
 	char loopq_name[ODP_QUEUE_NAME_LEN];
@@ -226,12 +225,13 @@ static int init_loop(pktio_entry_t *entry, odp_pktio_t id)
 	entry->s.loopq = odp_queue_create(loopq_name,
 					  ODP_QUEUE_TYPE_POLL, NULL);
 
-	if (entry->s.loopq == ODP_QUEUE_INVALID)
+	if (entry->s.loopq == ODP_QUEUE_INVALID) {
+		ODP_ERR("Unable to create queue for loop device\n");
 		return -1;
+	}
 
 	return 0;
 }
-#endif
 
 odp_pktio_t odp_pktio_open(const char *dev, odp_pool_t pool,
 				const odp_pktio_param_t *param)
@@ -240,7 +240,7 @@ odp_pktio_t odp_pktio_open(const char *dev, odp_pool_t pool,
 	pktio_entry_t *pktio_entry;
 	queue_entry_t *queue_entry;
 	struct dpaa2_dev *ndev;
-	int ret;
+	int ret, loop_dev = 0;
 	uint8_t src_mac[ODPH_ETHADDR_LEN];
 
 	ODP_DBG("Allocating dpaa2 pktio\n");
@@ -252,9 +252,24 @@ odp_pktio_t odp_pktio_open(const char *dev, odp_pool_t pool,
 		return ODP_PKTIO_INVALID;
 	}
 
+	if (!(strcmp(dev, "loop"))) {
+		strcpy(container, vfio_container);
+		strcpy(loop_device, "LOOP_IF_");
+		strtok(container, ".");
+		strcat(loop_device, strtok(NULL, "."));
+
+		dev = getenv(loop_device);
+		if (!dev) {
+			ODP_ERR("Unable to find loop device");
+			return ODP_PKTIO_INVALID;
+		}
+		loop_dev = 1;
+		ODP_DBG("%s is mapped to loop device\n", dev);
+	}
+
 	ndev = odp_get_dpaa2_eth_dev(dev);
 	if (!ndev) {
-		ODP_ERR("unable to find dpaa2_dev");
+		ODP_ERR("unable to find dpaa2_dev %s", dev);
 		return ODP_PKTIO_INVALID;
 	}
 
@@ -268,10 +283,13 @@ odp_pktio_t odp_pktio_open(const char *dev, odp_pool_t pool,
 	pktio_entry = get_pktio_entry(id);
 	if (!pktio_entry)
 		return ODP_PKTIO_INVALID;
-#if 0
-	if (strcmp(dev, "loop") == 0)
+
+	if (loop_dev) {
 		ret = init_loop(pktio_entry, id);
-#endif
+		if (ret)
+			return ODP_PKTIO_INVALID;
+	}
+
 	pktio_entry->s.pkt_dpaa2.dev = ndev;
 	ndev->pktio = (uint64_t)id;
 	memcpy(&pktio_entry->s.param, param, sizeof(odp_pktio_param_t));
@@ -358,13 +376,13 @@ int odp_pktio_close(odp_pktio_t id)
 	lock_entry(entry);
 	if (!is_free(entry)) {
 		res  = close_pkt_dpaa2(&entry->s.pkt_dpaa2);
-		/*todo case ODP_PKTIO_TYPE_LOOPBACK:
-			res = odp_queue_destroy(entry->s.loopq);
-			break;*/
+		if (entry->s.type == ODP_PKTIO_TYPE_LOOPBACK)
+			res |= odp_queue_destroy(entry->s.loopq);
+
 		res |= free_pktio_entry(id);
 	}
 
-	res = cleanup_pkt_dpaa2(&entry->s.pkt_dpaa2);
+	res |= cleanup_pkt_dpaa2(&entry->s.pkt_dpaa2);
 	if (res)
 		ODP_ERR("pktio cleanup failed\n");
 
@@ -383,6 +401,15 @@ odp_pktio_t odp_pktio_lookup(const char *dev)
 	odp_pktio_t id = ODP_PKTIO_INVALID;
 	pktio_entry_t *entry;
 	int i;
+
+	if (!(strcmp(dev, "loop"))) {
+		dev = getenv(loop_device);
+		if (!dev) {
+			ODP_ERR("Unable to find loop device");
+			return ODP_PKTIO_INVALID;
+		}
+		ODP_DBG("%s is mapped to loop device\n", dev);
+	}
 
 	odp_spinlock_lock(&pktio_tbl->lock);
 

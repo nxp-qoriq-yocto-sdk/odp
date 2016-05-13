@@ -779,7 +779,7 @@ int main(int argc, char *argv[])
 	printf("first CPU:          %i\n", odp_cpumask_first(&cpumask));
 	printf("cpu mask:           %s\n", cpumaskstr);
 
-	if (num_workers < gbl_args->appl.if_count) {
+	if ((gbl_args->appl.mode == APPL_MODE_PKT_BURST) && (num_workers < gbl_args->appl.if_count)) {
 		EXAMPLE_ERR("Error: CPU count %d less than interface count\n",
 			num_workers);
 		exit(EXIT_FAILURE);

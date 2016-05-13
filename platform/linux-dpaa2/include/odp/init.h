@@ -29,6 +29,8 @@ extern "C" {
 
 #include <odp/api/init.h>
 
+extern char *vfio_container;
+
 /** This variable is set when signal interrupt is received. */
 extern int received_sigint;
 
