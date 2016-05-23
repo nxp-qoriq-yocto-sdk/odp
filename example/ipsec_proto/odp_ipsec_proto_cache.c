@@ -163,17 +163,23 @@ int create_ipsec_cache_entry(sa_db_entry_t *cipher_sa,
 	/* Remove outer header (decap) */
 	ipsec_params.remove_outer_hdr = TRUE;
 	/* Synchronous session create for now */
-	if (odp_crypto_session_create(&params, &session, &ses_create_rc))
+	if (odp_crypto_session_create(&params, &session, &ses_create_rc)) {
+		free(ip);
 		return -1;
-	if (ODP_CRYPTO_SES_CREATE_ERR_NONE != ses_create_rc)
+	}
+	if (ODP_CRYPTO_SES_CREATE_ERR_NONE != ses_create_rc) {
+		free(ip);
 		return -1;
+	}
 
 	/* Synchronous session configure for ipsec */
 	if (odp_crypto_session_config_ipsec(session,
 					    ODP_IPSEC_MODE_TUNNEL,
 				ODP_IPSEC_ESP,
-				&ipsec_params))
+				&ipsec_params)) {
+		free(ip);
 		return -1;
+	}
 
 	/* Copy remainder */
 	if (cipher_sa) {

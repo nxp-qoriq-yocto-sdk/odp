@@ -409,7 +409,7 @@ static void initialize_intf(char *intf)
 
 	/* Read the source MAC address for this interface */
 	ret = odp_pktio_mac_addr(pktio, src_mac, sizeof(src_mac));
-	if (ret <= 0) {
+	if (ret < 0) {
 		EXAMPLE_ERR("Error: failed during MAC address get for %s\n",
 			    intf);
 		exit(EXIT_FAILURE);
@@ -1021,6 +1021,10 @@ static void parse_args(int argc, char *argv[], appl_args_t *appl_args)
 			/* Allocate storage for the if names */
 			appl_args->if_names =
 				calloc(appl_args->if_count, sizeof(char *));
+			if (!appl_args->if_names) {
+				EXAMPLE_ERR("Memory allocation failure\n");
+				exit(EXIT_SUCCESS);
+			}
 			/* Store the if names (reset names string) */
 			strcpy(appl_args->if_str, optarg);
 			for (token = strtok(appl_args->if_str, ","), i = 0;

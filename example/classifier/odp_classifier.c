@@ -18,6 +18,8 @@
 #include <errno.h>
 #include <stdio.h>
 
+#define MAX_STRING      32   /**< maximum string length */
+
 /** @def MAX_WORKERS
  * @brief Maximum number of worker threads
  */
@@ -307,6 +309,8 @@ static odp_pktio_t create_pktio(const char *dev, odp_pool_t pool)
 	char inq_name[ODP_QUEUE_NAME_LEN];
 	int ret;
 	odp_pktio_param_t pktio_param;
+	uint8_t src_mac[ODPH_ETHADDR_LEN];
+	char src_mac_str[MAX_STRING];
 
 	odp_pktio_param_init(&pktio_param);
 	pktio_param.in_mode = ODP_PKTIN_MODE_SCHED;
@@ -341,12 +345,22 @@ static odp_pktio_t create_pktio(const char *dev, odp_pool_t pool)
 		exit(EXIT_FAILURE);
 	}
 
+	/* Read the source MAC address for this interface */
+	ret = odp_pktio_mac_addr(pktio, src_mac, sizeof(src_mac));
+	if (ret < 0) {
+		EXAMPLE_ERR("Error: failed during MAC address get for %s\n",
+			    dev);
+		exit(EXIT_FAILURE);
+	}
+
 	printf("  created pktio:%02" PRIu64
 			", dev:%s, queue mode (ATOMIC queues)\n"
 			"  \tdefault pktio%02" PRIu64
-			"-INPUT queue:%" PRIu64 "\n",
+			"-INPUT queue:%" PRIu64 "\n"
+			"          source mac address %s\n",
 			odp_pktio_to_u64(pktio), dev,
-			odp_pktio_to_u64(pktio), odp_queue_to_u64(inq_def));
+			odp_pktio_to_u64(pktio), odp_queue_to_u64(inq_def),
+			mac_addr_str(src_mac_str, src_mac));
 
 	return pktio;
 }

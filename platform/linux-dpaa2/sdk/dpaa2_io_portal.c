@@ -19,9 +19,7 @@
 #include <dpaa2_internal.h>
 #include <dpaa2_vfio.h>
 
-#ifdef ODP_ON_VM
-#include <odp/api/cpu.h>
-
+#if defined(BUILD_LS2085) || defined(BUILD_LS2080)
 #define NUM_HOST_CPUS 8
 #endif
 
@@ -270,9 +268,12 @@ int32_t dpaa2_io_portal_probe(ODP_UNUSED struct dpaa2_dev *dev,
 	DPAA2_INFO(FW, "\t Allocated DPIO Device %d\n", io_space_count);
 	return DPAA2_SUCCESS;
 free_res:
+	if (dpio_dev->sw_portal)
+		qbman_swp_finish(dpio_dev->sw_portal);
 	dpaa2_free(dpio_dev->dpio);
 free_dpio:
 	LOCK_DESTROY(dpio_dev->lock);
+	dpaa2_free(dpio_dev->intr_handle);
 	dpaa2_free(dpio_dev);
 	return DPAA2_FAILURE;
 }
@@ -283,9 +284,11 @@ void release_dpio(struct dpaa2_dpio_dev *dpio_dev)
 	int ret;
 
 	SWP_LOCK(dpio_dev);
+	if (dpio_dev->sw_portal)
+		qbman_swp_finish(dpio_dev->sw_portal);
+
 	if (dpio_dev->dpio) {
 		DPAA2_INFO(FW, "Closing DPIO object %p\n", dpio_dev->dpio);
-		qbman_swp_finish(dpio_dev->sw_portal);
 
 		ret = dpio_disable(dpio_dev->dpio, CMD_PRI_LOW, dpio_dev->token);
 		if (ret)
@@ -438,18 +441,15 @@ static int32_t dpaa2_configure_stashing(void)
 		return DPAA2_FAILURE;
 	}
 
-#ifdef ODP_ON_VM
-/*
- * In case of running ODP on the Virtual Machine the Stashing Destination gets
- * set in the H/W w.r.t. the Virtual CPU ID's. As a W.A. environment variable
- * HOST_START_CPU tells which the offset of the host start core of the
- * Virtual Machine threads.
- */
+	/* In case of running ODP on the Virtual Machine the Stashing
+	 * Destination gets set in the H/W w.r.t. the Virtual CPU ID's.
+	 * As a W.A. environment variable HOST_START_CPU tells which the
+	 * offset of the host start core of the Virtual Machine threads.
+	 */
 	if (getenv("HOST_START_CPU")) {
 		cpu_id += atoi(getenv("HOST_START_CPU"));
 		cpu_id = cpu_id % NUM_HOST_CPUS;
 	}
-#endif
 
 	/* Set the STASH Destination depending on Current CPU ID.
 	   Valid values of SDEST are 4,5,6,7. Where,

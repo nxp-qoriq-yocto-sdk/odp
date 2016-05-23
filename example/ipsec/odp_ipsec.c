@@ -548,7 +548,7 @@ void initialize_intf(char *intf)
 
 	/* Read the source MAC address for this interface */
 	ret = odp_pktio_mac_addr(pktio, src_mac, sizeof(src_mac));
-	if (ret <= 0) {
+	if (ret < 0) {
 		EXAMPLE_ERR("Error: failed during MAC address get for %s\n",
 			    intf);
 		exit(EXIT_FAILURE);

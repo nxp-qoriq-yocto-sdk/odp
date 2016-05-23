@@ -308,7 +308,7 @@ odp_pktio_t odp_pktio_open(const char *dev, odp_pool_t pool,
 	unlock_entry_classifier(pktio_entry);
 
 	ret = odp_pktio_mac_addr(id, src_mac, sizeof(src_mac));
-	if (ret <= 0) {
+	if (ret < 0) {
 		ODP_ERR("Error: failed during MAC address get for %s\n", dev);
 	} else {
 		printf("\nPort %s = Mac %02X.%02X.%02X.%02X.%02X.%02X\n", \

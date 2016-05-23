@@ -378,6 +378,9 @@ void odp_pool_print(odp_pool_t pool_hdl)
 {
 	pool_entry_t *pool = odp_pool_to_entry(pool_hdl);
 
+	if (!pool)
+		return;
+
 	ODP_PRINT("\n\n");
 	ODP_PRINT("POOL PRINT:\n");
 	ODP_PRINT("Pool id              = \t\t%d\n", pool->s.pool_id);

@@ -395,7 +395,7 @@ int dpaa2_eth_timestamp_enable(struct dpaa2_dev *dev)
 {
 	struct dpaa2_dev_priv *dev_priv = dev->priv;
 	struct fsl_mc_io *dpni = (struct fsl_mc_io *)(dev_priv->hw);
-	struct dpni_buffer_layout layout;
+	struct dpni_buffer_layout layout = {0};
 	int ret;
 
 	layout.options = DPNI_BUF_LAYOUT_OPT_TIMESTAMP;
@@ -427,7 +427,7 @@ int dpaa2_eth_timestamp_disable(struct dpaa2_dev *dev)
 {
 	struct dpaa2_dev_priv *dev_priv = dev->priv;
 	struct fsl_mc_io *dpni = (struct fsl_mc_io *)(dev_priv->hw);
-	struct dpni_buffer_layout layout;
+	struct dpni_buffer_layout layout = {0};
 	int ret;
 
 	layout.options = DPNI_BUF_LAYOUT_OPT_TIMESTAMP;

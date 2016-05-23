@@ -10,7 +10,6 @@
 DPAA2_CFLAGS = -Wno-cast-qual -Wno-pointer-arith
 DPAA2_CFLAGS += -D_GNU_SOURCE
 #DPAA2_CFLAGS += -DODP_USE_PHYS_IOVA
-#DPAA2_CFLAGS += -DODP_ON_VM
 
 PLAT_CFLAGS = $(DPAA2_CFLAGS)
 PLAT_CFLAGS += -I$(top_srcdir)/platform/linux-dpaa2/flib/linux/

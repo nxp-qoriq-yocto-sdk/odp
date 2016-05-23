@@ -198,7 +198,7 @@ int32_t dpaa2_eth_probe(struct dpaa2_dev *dev,
 							 ODP_CACHE_LINE_SIZE);
 	if (!ext_cfg) {
 		DPAA2_ERR(ETH, "No data memory\n");
-		return DPAA2_FAILURE;
+		goto get_attr_failure;
 	}
 	attr.ext_cfg_iova = (uint64_t)(DPAA2_VADDR_TO_IOVA(ext_cfg));
 
@@ -1078,7 +1078,7 @@ int32_t dpaa2_eth_attach_bp_list(struct dpaa2_dev *dev,
 	int32_t loop, retcode;
 	struct dpaa2_dev_priv *dev_priv = dev->priv;
 	struct fsl_mc_io *dpni = dev_priv->hw;
-	struct dpni_pools_cfg bpool_cfg;
+	struct dpni_pools_cfg bpool_cfg = {0};
 	struct dpaa2_bp_list *bp_list = (struct dpaa2_bp_list *)blist;
 
 	/*Attach buffer pool to the network interface as described by the user*/

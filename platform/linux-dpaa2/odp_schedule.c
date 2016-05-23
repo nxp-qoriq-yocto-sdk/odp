@@ -331,15 +331,15 @@ void odp_schedule_queue(odp_queue_t queue, int prio)
 	if (enable_hash) {
 		/*Configure DPAA2 for RX Queue*/
 		for (i = 0; i < max_rx_vq; i++) {
-			dpaa2_eth_setup_rx_vq(ndev, i, &vq_cfg);
-			/* All Low level VQs must be mapped to single User
-				Qeueue */
-			dpaa2_dev_set_vq_handle(ndev->rx_vq[i],
-					(uint64_t)qentry->s.handle);
+			ret = dpaa2_eth_setup_rx_vq(ndev, i, &vq_cfg);
 			if (DPAA2_FAILURE == ret) {
 				ODP_ERR("Fail to setup RX VQ with CONC\n");
 				return;
 			}
+			/* All Low level VQs must be mapped to single User
+				Qeueue */
+			dpaa2_dev_set_vq_handle(ndev->rx_vq[i],
+						(uint64_t)qentry->s.handle);
 			ODP_DBG("setup VQ %d with handle 0x%X\n", i,
 					qentry->s.handle);
 		}

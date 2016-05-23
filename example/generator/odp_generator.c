@@ -23,6 +23,7 @@
 #include <odp/helper/udp.h>
 #include <odp/helper/icmp.h>
 
+#define MAX_STRING             32   		/**< maximum string length */
 #define MAX_WORKERS            32		/**< max number of works */
 #define SHM_PKT_POOL_SIZE      (512*2048)	/**< pkt pool size */
 #define SHM_PKT_POOL_BUF_SIZE  1856		/**< pkt pool buf size */
@@ -330,6 +331,8 @@ static odp_pktio_t create_pktio(const char *dev, odp_pool_t pool)
 	int ret;
 	odp_queue_t inq_def;
 	odp_pktio_param_t pktio_param;
+	uint8_t src_mac[ODPH_ETHADDR_LEN];
+	char src_mac_str[MAX_STRING];
 
 	odp_pktio_param_init(&pktio_param);
 	pktio_param.in_mode = ODP_PKTIN_MODE_SCHED;
@@ -364,12 +367,22 @@ static odp_pktio_t create_pktio(const char *dev, odp_pool_t pool)
 	if (ret)
 		EXAMPLE_ABORT("Error: unable to start %s\n", dev);
 
+	/* Read the source MAC address for this interface */
+	ret = odp_pktio_mac_addr(pktio, src_mac, sizeof(src_mac));
+	if (ret < 0) {
+		EXAMPLE_ERR("Error: failed during MAC address get for %s\n",
+			    dev);
+		exit(EXIT_FAILURE);
+	}
+
 	printf("  created pktio:%02" PRIu64
 	       ", dev:%s, queue mode (ATOMIC queues)\n"
 	       "          default pktio%02" PRIu64
-	       "-INPUT queue:%" PRIu64 "\n",
+	       "-INPUT queue:%" PRIu64 "\n"
+	       "          source mac address %s\n",
 	       odp_pktio_to_u64(pktio), dev,
-	       odp_pktio_to_u64(pktio), odp_queue_to_u64(inq_def));
+	       odp_pktio_to_u64(pktio), odp_queue_to_u64(inq_def),
+	       mac_addr_str(src_mac_str, src_mac));
 
 	return pktio;
 }

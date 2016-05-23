@@ -16,6 +16,8 @@
 #include <odp/helper/eth.h>
 #include <odp/helper/ip.h>
 
+#define MAX_STRING             32   		/**< maximum string length */
+
 /** @def MAX_WORKERS
  * @brief Maximum number of worker threads
  */
@@ -117,6 +119,8 @@ static odp_pktio_t create_pktio(const char *dev, odp_pool_t pool, int mode)
 	char inq_name[ODP_QUEUE_NAME_LEN];
 	int ret;
 	odp_pktio_param_t pktio_param;
+	uint8_t src_mac[ODPH_ETHADDR_LEN];
+	char src_mac_str[MAX_STRING];
 
 	odp_pktio_param_init(&pktio_param);
 
@@ -142,6 +146,17 @@ static odp_pktio_t create_pktio(const char *dev, odp_pool_t pool, int mode)
 	snprintf(inq_name, sizeof(inq_name), "%" PRIu64 "-pktio_inq_def",
 		 odp_pktio_to_u64(pktio));
 	inq_name[ODP_QUEUE_NAME_LEN - 1] = '\0';
+
+	/* Read the source MAC address for this interface */
+	ret = odp_pktio_mac_addr(pktio, src_mac, sizeof(src_mac));
+	if (ret < 0) {
+		EXAMPLE_ERR("Error: failed during MAC address get for %s\n",
+			    dev);
+		exit(EXIT_FAILURE);
+	}
+
+	printf("  source mac address %s\n",
+	       mac_addr_str(src_mac_str, src_mac));
 
 	switch (mode) {
 	case  APPL_MODE_PKT_BURST:

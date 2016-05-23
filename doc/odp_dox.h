@@ -26,8 +26,11 @@
  * of the implementation layer is to provide an optimal mapping of ODP
  * APIs to the underlying capabilities (including hardware
  * co-processing and acceleration support) of of SoCs hosting ODP
- * implementations. Freescale has implemented 'linux-dpaa2' as a an
- * implementation layer for ODP applications on DPAA2 platforms.
+ * implementations. This document has been generated from the ODP
+ * source code version 1.4.1. Refer to the Todo List chapter for a
+ * list of non-supported APIs on the QorIQ platform(s). API document
+ * has been updated for additional feature(s) supported on QorIQ platform(s).
+ * => Ipsec Protocol offload extensions – Refer section 5.8 ODP Crypto.
  *
  * @section contact Contact Details
  * - The ODP Open source web site is http://www.opendataplane.org/

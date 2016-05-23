@@ -18,6 +18,7 @@
 extern "C" {
 #endif
 
+#include <stdio.h>
 #include <odp/std_types.h>
 #include <odp/byteorder.h>
 #include <odp/align.h>
@@ -83,6 +84,22 @@ _ODP_STATIC_ASSERT(sizeof(odph_vlanhdr_t) == ODPH_VLANHDR_LEN, "ODPH_VLANHDR_T__
 #define ODPH_ETHTYPE_MPLS_MCAST 0x8848 /**< MPLS multicast */
 #define ODPH_ETHTYPE_MACSEC     0x88E5 /**< MAC security IEEE 802.1AE */
 #define ODPH_ETHTYPE_1588       0x88F7 /**< Precision Time Protocol IEEE 1588 */
+
+/**
+ * Generate text string representing MAC address
+ *
+ * @param b     Pointer to buffer to store string
+ * @param mac   Pointer to MAC address
+ *
+ * @return Pointer to supplied buffer
+ */
+static inline
+char *mac_addr_str(char *b, uint8_t *mac)
+{
+	sprintf(b, "%02X.%02X.%02X.%02X.%02X.%02X",
+		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+	return b;
+}
 
 /**
  * @}

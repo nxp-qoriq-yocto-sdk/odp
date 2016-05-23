@@ -266,7 +266,7 @@ int dpaa2_attach_frameq_to_conc(
 /* Detach a frame queue from a concentrator device */
 int dpaa2_detach_frameq_from_conc(void *h_dpaa2_hwq)
 {
-	struct dpci_rx_queue_cfg rx_queue_cfg;
+	struct dpci_rx_queue_cfg rx_queue_cfg = {0};
 	struct dpaa2_hwq_t *dpaa2_hwq = h_dpaa2_hwq;
 	int ret;
 
