@@ -140,6 +140,8 @@ static void install_signal_handler(void)
 
 static void __attribute__((destructor(102))) odp_finish(void)
 {
+	if (!netcfg)
+		return;
 	ODP_DBG("odp_finish\n");
 	odp_term_global();
 }

@@ -872,34 +872,30 @@ main(int argc, char **argv)
 	int err_flag = SUCCESS;
 	int32_t num_workers = 0;
 	int32_t cpu;
-
 	odph_linux_pthread_t thread_tbl[MAX_WORKER_THREADS];
 	odp_cpumask_t cpumask, l_cpumask;
 	odpfsl_kni_config_t kconfig;
-
 	packet_pool = ODP_POOL_INVALID;
-
 	args_t *args;
 	thread_args_t t_data[MAX_WORKER_THREADS];
 
-	EXAMPLE_DBG("Debug: Initializing ODP (Global and Local Init).\n");
-	initialize_odp();
-
 	/* Handling command line arguments */
 	args = calloc(1, sizeof(args_t));
-	if (NULL == args) {
+	if (!args) {
 		EXAMPLE_ERR("Error: Failed to allocate memory for args.\n");
-		err_flag = FAILURE;
-		goto cleanup;
+		exit(EXIT_FAILURE);
 	}
 	/* Parsing and storing the arguments */
 	ret = parse_cmdline_args(argc, argv, args);
 	if (ret != SUCCESS) {
 		EXAMPLE_ERR("Error: Commandline argument parsing not "\
 				"successful.\n");
-		err_flag = FAILURE;
-		goto cleanup;
+		free(args);
+		exit(EXIT_FAILURE);
 	}
+
+	EXAMPLE_DBG("Debug: Initializing ODP (Global and Local Init).\n");
+	initialize_odp();
 
 	EXAMPLE_DBG("Debug: Creating Packet Pool for Pktio Devices.\n");
 	ret = create_pool();
@@ -985,6 +981,9 @@ cleanup:
 
 	if (args && args->if_names)
 		free(args->if_names);
+
+	if (args)
+		free(args);
 
 	/* Finishing ODP */
 	finish_odp(); /* Handling error by this is irrelevant */

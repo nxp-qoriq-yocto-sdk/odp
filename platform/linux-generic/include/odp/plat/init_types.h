@@ -1,5 +1,4 @@
 /* Copyright (c) 2015, Linaro Limited
- * Copyright (c) 2016, Freescale Semiconductor Inc.
  * All rights reserved.
  *
  * SPDX-License-Identifier:     BSD-3-Clause

@@ -823,6 +823,14 @@ main(int argc, char *argv[])
 	odp_pool_param_t params;
 	odp_queue_param_t qparam;
 
+	/*Validate if user has passed only help option*/
+	if (argc == 2) {
+		if (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help")) {
+			usage(argv[0]);
+			exit(EXIT_SUCCESS);
+		}
+	}
+
 	/* create by default scheduled queues */
 	queue_create = odp_queue_create;
 	schedule_multi = odp_schedule_multi;

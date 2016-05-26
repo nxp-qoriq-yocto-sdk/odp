@@ -329,8 +329,15 @@ int main(int argc, char *argv[])
 	odp_timer_pool_info_t tpinfo;
 	odp_cpumask_t cpumask;
 	char cpumaskstr[ODP_CPUMASK_STR_SIZE];
-	odp_shm_t shm;
 	test_globals_t	*gbls;
+
+	/* Reserve memory for test_globals_t from shared mem */
+	gbls = calloc(1, sizeof(test_globals_t));
+	if (!gbls) {
+		EXAMPLE_ERR("Error: args mem alloc failed.\n");
+		return -1;
+	}
+	parse_args(argc, argv, &gbls->args);
 
 	printf("\nODP timer example starts\n");
 
@@ -355,23 +362,6 @@ int main(int argc, char *argv[])
 	printf("Max CPU count:   %i\n",        odp_cpu_count());
 
 	printf("\n");
-
-	/* Reserve memory for test_globals_t from shared mem */
-	shm = odp_shm_reserve("shm_test_globals", sizeof(test_globals_t),
-			      ODP_CACHE_LINE_SIZE, 0);
-	if (ODP_SHM_INVALID == shm) {
-		EXAMPLE_ERR("Error: shared mem reserve failed.\n");
-		return -1;
-	}
-
-	gbls = odp_shm_addr(shm);
-	if (NULL == gbls) {
-		EXAMPLE_ERR("Error: shared mem alloc failed.\n");
-		return -1;
-	}
-	memset(gbls, 0, sizeof(test_globals_t));
-
-	parse_args(argc, argv, &gbls->args);
 
 	memset(thread_tbl, 0, sizeof(thread_tbl));
 
@@ -480,6 +470,8 @@ int main(int argc, char *argv[])
 
 	/* Wait for worker threads to exit */
 	odph_linux_pthread_join(thread_tbl, num_workers);
+	if (gbls)
+		free(gbls);
 
 	printf("ODP timer test complete\n\n");
 

@@ -19,3 +19,5 @@ license. BSD-3 and GPLv2 Lincense texts are available in respective files stated
 above.
 List of files having DUAL License:
 - /platform/linux-dpaa2/include/dpaa2/kni/odpfsl_kni_common.h
+All files under the mc repository:
+- /platform/linux-dpaa2/flib/mc/

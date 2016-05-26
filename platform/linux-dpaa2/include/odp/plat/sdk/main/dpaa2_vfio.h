@@ -22,7 +22,7 @@
 #include <sys/stat.h>
 #include <sys/vfs.h>
 #include <sys/mman.h>
-#include <ls2bus/vfio.h>
+#include <linux/vfio.h>
 
 #define VFIO_PATH_MAX		100
 #define VFIO_MAX_GRP		1

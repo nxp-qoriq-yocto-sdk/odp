@@ -347,6 +347,11 @@ static enum qman_cb_dqrr_result crypto_ipsec_dqrr_cb_inp(
 	/* For decrypted packet remove padding */
 	if (ses->s.op == ODP_CRYPTO_OP_DECODE) {
 		ip = (odph_ipv4hdr_t *)odp_packet_l3_ptr(sgp->in_pkt, NULL);
+		if (ip->proto == IPPROTO_ESP) {
+			ODP_DBG("Err Packet.\n");
+			odp_packet_free(sgp->in_pkt);
+			return qman_cb_dqrr_consume;
+		}
 		data = odp_packet_l2_ptr(sgp->in_pkt, &len);
 		esp_t = (odph_esptrl_t *)((uint8_t *)(data) + len) - 1;
 		odp_packet_pull_tail(sgp->in_pkt, esp_t->pad_len + sizeof(*esp_t));
